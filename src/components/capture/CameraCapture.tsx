@@ -1,14 +1,29 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { ArrowLeft, Zap, ZapOff, Circle } from "lucide-react";
+import { ArrowLeft, Zap, ZapOff, Settings } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import RecordingRound from "./RecordingRound";
 import ProcessingScreen from "./ProcessingScreen";
+import VideoTutorialOverlay from "./VideoTutorialOverlay"; // Import the new component
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 interface CameraCaptureProps {
   onBack: () => void;
 }
 
-type CaptureState = "setup" | "round1" | "round2" | "round3" | "processing";
+type CaptureState =
+  | "setup"
+  | "tutorial-middle"
+  | "record-middle"
+  | "tutorial-top"
+  | "record-top"
+  | "tutorial-bottom"
+  | "record-bottom"
+  | "processing";
 
 // Extend MediaTrackCapabilities for better type safety
 interface ExtendedMediaTrackCapabilities extends MediaTrackCapabilities {
@@ -24,6 +39,28 @@ interface ExtendedMediaTrackConstraintSet extends MediaTrackConstraintSet {
   exposureCompensation?: number;
 }
 
+interface ResolutionOption {
+  width: number;
+  height: number;
+  label: string;
+}
+
+interface FpsOption {
+  value: number;
+  label: string;
+}
+
+const RESOLUTION_OPTIONS: ResolutionOption[] = [
+  { width: 3840, height: 2160, label: "4K" },
+  { width: 1920, height: 1080, label: "1080p" },
+  { width: 1280, height: 720, label: "720p" },
+];
+
+const FPS_OPTIONS: FpsOption[] = [
+  { value: 60, label: "60 FPS" },
+  { value: 30, label: "30 FPS" },
+];
+
 const CameraCapture = ({ onBack }: CameraCaptureProps) => {
   const [captureState, setCaptureState] = useState<CaptureState>("setup");
   const [isLandscape, setIsLandscape] = useState(true);
@@ -31,9 +68,15 @@ const CameraCapture = ({ onBack }: CameraCaptureProps) => {
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [zoom, setZoom] = useState(1);
   const [exposure, setExposure] = useState(0);
-  const [showExposureSlider, setShowExposureSlider] = useState(false); // New state for exposure slider visibility
-  const [resolution, setResolution] = useState("Unknown");
-  const [fps, setFps] = useState("Unknown");
+  const [showExposureSlider, setShowExposureSlider] = useState(false);
+  const [currentResolution, setCurrentResolution] = useState<ResolutionOption>(
+    RESOLUTION_OPTIONS[1]
+  ); // Default to 1080p
+  const [currentFps, setCurrentFps] = useState<FpsOption>(FPS_OPTIONS[0]); // Default to 60 FPS
+  const [supportedResolutions, setSupportedResolutions] = useState<ResolutionOption[]>([]);
+  const [supportedFps, setSupportedFps] = useState<FpsOption[]>([]);
+  const [showTutorial, setShowTutorial] = useState(false);
+  const [currentTutorialVideo, setCurrentTutorialVideo] = useState("");
   const videoRef = useRef<HTMLVideoElement>(null);
   const { toast } = useToast();
 
@@ -47,61 +90,151 @@ const CameraCapture = ({ onBack }: CameraCaptureProps) => {
     return () => window.removeEventListener("resize", checkOrientation);
   }, []);
 
-  const initCamera = useCallback(async () => {
+  const initCamera = useCallback(async (reinit: boolean = false) => {
+    if (stream && !reinit) {
+      stream.getTracks().forEach((track) => track.stop());
+    }
+
     try {
+      // Determine available capabilities
+      const tempStream = await navigator.mediaDevices.getUserMedia({ video: true });
+      const tempTrack = tempStream.getVideoTracks()[0];
+      const capabilities = tempTrack.getCapabilities();
+      tempTrack.stop(); // Stop the temporary stream
+
+      const newSupportedResolutions: ResolutionOption[] = [];
+      for (const res of RESOLUTION_OPTIONS) {
+        if (
+          capabilities.width &&
+          capabilities.height &&
+          res.width <= (capabilities.width.max || Infinity) &&
+          res.height <= (capabilities.height.max || Infinity)
+        ) {
+          newSupportedResolutions.push(res);
+        }
+      }
+      setSupportedResolutions(newSupportedResolutions.length > 0 ? newSupportedResolutions : RESOLUTION_OPTIONS);
+
+      const newSupportedFps: FpsOption[] = [];
+      for (const fpsOption of FPS_OPTIONS) {
+        if (
+          capabilities.frameRate &&
+          fpsOption.value <= (capabilities.frameRate.max || Infinity)
+        ) {
+          newSupportedFps.push(fpsOption);
+        }
+      }
+      setSupportedFps(newSupportedFps.length > 0 ? newSupportedFps : FPS_OPTIONS);
+
+      // Apply selected constraints
       const mediaStream = await navigator.mediaDevices.getUserMedia({
         video: {
           facingMode: "environment",
-          width: { ideal: 3840 },
-          height: { ideal: 2160 },
-          frameRate: { ideal: 60 }
+          width: { ideal: currentResolution.width },
+          height: { ideal: currentResolution.height },
+          frameRate: { ideal: currentFps.value },
         },
-        audio: false
+        audio: false,
       });
 
       setStream(mediaStream);
       if (videoRef.current) {
         videoRef.current.srcObject = mediaStream;
-        videoRef.current.play().catch(error => {
+        videoRef.current.play().catch((error) => {
           console.error("Error playing video stream:", error);
         });
 
         const track = mediaStream.getVideoTracks()[0];
         const settings = track.getSettings();
-        setResolution(`${settings.width}x${settings.height}`);
-        setFps(`${settings.frameRate}`);
+        setCurrentResolution({ width: settings.width || 0, height: settings.height || 0, label: `${settings.width}x${settings.height}` });
+        setCurrentFps({ value: settings.frameRate || 0, label: `${settings.frameRate} FPS` });
       }
     } catch (error) {
+      console.error("Camera access error:", error);
       toast({
         title: "Camera Error",
-        description: "Unable to access camera. Please check permissions.",
-        variant: "destructive"
+        description:
+          "Unable to access camera. On iOS, please ensure camera access is enabled for Safari/browser in your device settings (Settings > Safari > Camera). Also, check if any other app is currently using the camera. " + error,
+        variant: "destructive",
       });
     }
-  }, [toast]);
+  }, [toast, currentResolution, currentFps]);
+
+  const handleChangeResolution = useCallback(async (res: ResolutionOption) => {
+    setCurrentResolution(res);
+    await initCamera(true);
+  }, [initCamera]);
+
+  const handleChangeFps = useCallback(async (fps: FpsOption) => {
+    setCurrentFps(fps);
+    await initCamera(true);
+  }, [initCamera]);
 
   useEffect(() => {
     if (captureState === "setup") {
       initCamera();
+    } else if (
+      captureState.startsWith("tutorial-") &&
+      stream &&
+      videoRef.current
+    ) {
+      // Pause camera feed for tutorial
+      if (videoRef.current.srcObject) {
+        (videoRef.current.srcObject as MediaStream)
+          .getVideoTracks()
+          .forEach((track) => (track.enabled = false));
+      }
+      setShowTutorial(true);
+      // Set the appropriate tutorial video
+      if (captureState === "tutorial-middle") {
+        setCurrentTutorialVideo("https://example.com/videos/middle-angle.mp4"); // Placeholder
+      } else if (captureState === "tutorial-top") {
+        setCurrentTutorialVideo("https://example.com/videos/top-angle.mp4"); // Placeholder
+      } else if (captureState === "tutorial-bottom") {
+        setCurrentTutorialVideo("https://example.com/videos/bottom-angle.mp4"); // Placeholder
+      }
+    } else if (captureState.startsWith("record-")) {
+      // Resume camera feed for recording
+      if (videoRef.current && videoRef.current.srcObject) {
+        (videoRef.current.srcObject as MediaStream)
+          .getVideoTracks()
+          .forEach((track) => (track.enabled = true));
+      }
+      setShowTutorial(false);
     }
 
     return () => {
       if (stream) {
-        stream.getTracks().forEach(track => track.stop());
+        stream.getTracks().forEach((track) => track.stop());
       }
     };
   }, [captureState, initCamera, stream]);
 
-  const toggleFlash = () => {
+  const toggleFlash = async () => {
     if (stream) {
       const track = stream.getVideoTracks()[0];
       const capabilities = track.getCapabilities() as ExtendedMediaTrackCapabilities;
-      
+
       if (capabilities.torch !== undefined) {
-        track.applyConstraints({
-          advanced: [{ torch: !flashEnabled }] as ExtendedMediaTrackConstraintSet[]
-        }).catch(error => console.error("Error toggling torch:", error));
-        setFlashEnabled(!flashEnabled);
+        try {
+          await track.applyConstraints({
+            advanced: [{ torch: !flashEnabled }] as ExtendedMediaTrackConstraintSet[]
+          });
+          setFlashEnabled(!flashEnabled);
+        } catch (error) {
+          console.error("Error toggling torch:", error);
+          toast({
+            title: "Flashlight Error",
+            description: "Unable to toggle flashlight. Your device might not support this feature or it's currently unavailable.",
+            variant: "destructive"
+          });
+        }
+      } else {
+        toast({
+          title: "Flashlight Not Supported",
+          description: "Your device does not support flashlight control.",
+          variant: "destructive"
+        });
       }
     }
   };
@@ -135,12 +268,22 @@ const CameraCapture = ({ onBack }: CameraCaptureProps) => {
   };
 
   const handleRoundComplete = () => {
-    if (captureState === "round1") {
-      setCaptureState("round2");
-    } else if (captureState === "round2") {
-      setCaptureState("round3");
-    } else if (captureState === "round3") {
+    if (captureState === "record-middle") {
+      setCaptureState("tutorial-top");
+    } else if (captureState === "record-top") {
+      setCaptureState("tutorial-bottom");
+    } else if (captureState === "record-bottom") {
       setCaptureState("processing");
+    }
+  };
+
+  const handleTutorialComplete = () => {
+    if (captureState === "tutorial-middle") {
+      setCaptureState("record-middle");
+    } else if (captureState === "tutorial-top") {
+      setCaptureState("record-top");
+    } else if (captureState === "tutorial-bottom") {
+      setCaptureState("record-bottom");
     }
   };
 
@@ -166,19 +309,33 @@ const CameraCapture = ({ onBack }: CameraCaptureProps) => {
     return <ProcessingScreen onComplete={onBack} />;
   }
 
+
   return (
     <div className="fixed inset-0 bg-background">
+      {/* Video Tutorial Overlay */}
+      <VideoPlayerOverlay
+        src={currentTutorialVideo}
+        onComplete={handleTutorialComplete}
+        isOpen={showTutorial}
+      />
+
       {/* Camera feed */}
       <video
         ref={videoRef}
         autoPlay
         playsInline
         muted
-        className="absolute inset-0 w-full h-full object-cover"
+        className={`absolute inset-0 w-full h-full object-cover ${
+          showTutorial ? "hidden" : ""
+        }`}
       />
 
       {/* Overlay controls */}
-      <div className="absolute inset-0 pointer-events-none">
+      <div
+        className={`absolute inset-0 pointer-events-none ${
+          showTutorial ? "hidden" : ""
+        }`}
+      >
         {/* Top bar */}
         <div className="absolute top-0 left-0 right-0 p-4 flex justify-start items-center pointer-events-auto bg-gradient-to-b from-background/50 to-transparent">
           <button
@@ -187,22 +344,57 @@ const CameraCapture = ({ onBack }: CameraCaptureProps) => {
           >
             <ArrowLeft className="w-5 h-5 text-foreground" />
           </button>
-          {/* Resolution and FPS display */}
-          <div className="flex items-center gap-2 text-xs text-foreground/70 font-medium bg-surface/80 backdrop-blur-sm px-3 py-1 rounded-full">
-            <span>{resolution}</span>
-            <span>{fps} FPS</span>
-          </div>
+          {/* Resolution Dropdown */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="flex items-center gap-1 text-xs text-foreground font-medium bg-surface/80 backdrop-blur-sm px-3 py-1 rounded-full hover:bg-surface transition-colors">
+                <span>{currentResolution.label}</span>
+                <Settings className="w-3 h-3" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent className="w-40">
+              {supportedResolutions.map((res) => (
+                <DropdownMenuItem
+                  key={`${res.width}x${res.height}`}
+                  onClick={() => handleChangeResolution(res)}
+                  className={`${currentResolution.width === res.width ? "bg-accent text-accent-foreground" : ""}`}
+                >
+                  {res.label}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          {/* FPS Dropdown */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="flex items-center gap-1 text-xs text-foreground font-medium bg-surface/80 backdrop-blur-sm px-3 py-1 rounded-full hover:bg-surface transition-colors">
+                <span>{currentFps.label}</span>
+                <Settings className="w-3 h-3" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent className="w-40">
+              {supportedFps.map((fps) => (
+                <DropdownMenuItem
+                  key={fps.value}
+                  onClick={() => handleChangeFps(fps)}
+                  className={`${currentFps.value === fps.value ? "bg-accent text-accent-foreground" : ""}`}
+                >
+                  {fps.label}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
 
-        {/* Right side controls */}
-        <div className="absolute right-4 top-1/2 -translate-y-1/2 flex flex-col gap-8 pointer-events-auto">
+        <div className="absolute right-4 top-1/2 -translate-y-1/2 flex flex-col gap-4 pointer-events-auto">
           {/* Zoom control */}
-          <div className="flex flex-col items-center gap-3 bg-overlay/80 backdrop-blur-sm rounded-full p-2 border border-border/50">
+          <div className="flex flex-col items-center gap-2 bg-overlay/80 backdrop-blur-sm rounded-full p-1 border border-border/50">
             {[0.5, 1, 2, 3].map((zoomLevel) => (
               <button
                 key={zoomLevel}
                 onClick={() => handleZoomChange(zoomLevel)}
-                className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-colors ${
+                className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-colors ${
                   zoom.toFixed(1) === zoomLevel.toFixed(1)
                     ? "bg-neon text-background shadow-neon"
                     : "bg-transparent text-foreground/70 hover:text-foreground"
@@ -214,10 +406,10 @@ const CameraCapture = ({ onBack }: CameraCaptureProps) => {
           </div>
 
           {/* Exposure control */}
-          <div className="flex flex-col items-center gap-3 bg-overlay/80 backdrop-blur-sm rounded-full p-2 border border-border/50">
+          <div className="flex flex-col items-center gap-2 bg-overlay/80 backdrop-blur-sm rounded-full p-1 border border-border/50">
             <button
               onClick={() => setShowExposureSlider(!showExposureSlider)}
-              className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-colors bg-transparent text-foreground/70 hover:text-foreground"
+              className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-colors bg-transparent text-foreground/70 hover:text-foreground"
             >
               EXP
             </button>
@@ -229,7 +421,7 @@ const CameraCapture = ({ onBack }: CameraCaptureProps) => {
                 step="0.1"
                 value={exposure}
                 onChange={(e) => handleExposureChange(parseFloat(e.target.value))}
-                className="slider-vertical h-24 w-1 appearance-none bg-surface rounded-full cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-neon [&::-webkit-slider-thumb]:shadow-neon [&::-webkit-slider-thumb]:cursor-pointer [&::-moz-range-thumb]:w-3 [&::-moz-range-thumb]:h-3 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-neon [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:shadow-neon [&::-moz-range-thumb]:cursor-pointer mt-2"
+                className="slider-vertical h-20 w-1 appearance-none bg-surface rounded-full cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-neon [&::-webkit-slider-thumb]:shadow-neon [&::-webkit-slider-thumb]:cursor-pointer [&::-moz-range-thumb]:w-3 [&::-moz-range-thumb]:h-3 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-neon [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:shadow-neon [&::-moz-range-thumb]:cursor-pointer mt-1"
                 style={{ writingMode: 'vertical-lr', direction: 'rtl' }}
               />
             )}
@@ -241,20 +433,19 @@ const CameraCapture = ({ onBack }: CameraCaptureProps) => {
           <div className="w-3/4 h-3/4 border-2 border-foreground/50 rounded-lg" />
         </div>
 
-        {/* Center reticle */}
-        <div className="absolute inset-0 flex items-center justify-center">
-          <div className="w-32 h-32 border-2 border-neon/50 rounded-lg">
-            <div className="absolute top-0 left-0 w-4 h-4 border-t-4 border-l-4 border-neon" />
-            <div className="absolute top-0 right-0 w-4 h-4 border-t-4 border-r-4 border-neon" />
-            <div className="absolute bottom-0 left-0 w-4 h-4 border-b-4 border-l-4 border-neon" />
-            <div className="absolute bottom-0 right-0 w-4 h-4 border-b-4 border-r-4 border-neon" />
-          </div>
-        </div>
 
         {/* Recording round UI */}
-        {captureState !== "setup" && (
+        {(captureState === "record-middle" ||
+          captureState === "record-top" ||
+          captureState === "record-bottom") && (
           <RecordingRound
-            round={captureState === "round1" ? 1 : captureState === "round2" ? 2 : 3}
+            round={
+              captureState === "record-middle"
+                ? 1
+                : captureState === "record-top"
+                ? 2
+                : 3
+            }
             onComplete={handleRoundComplete}
             stream={stream}
           />
@@ -276,7 +467,7 @@ const CameraCapture = ({ onBack }: CameraCaptureProps) => {
           {/* Shutter button (only in setup) */}
           {captureState === "setup" && (
             <button
-              onClick={() => setCaptureState("round1")}
+              onClick={() => setCaptureState("tutorial-middle")}
               className="w-20 h-20 rounded-full bg-neon hover:bg-neon/80 flex items-center justify-center shadow-neon transition-all hover:scale-105"
             >
               <Circle className="w-12 h-12 text-background fill-background" />

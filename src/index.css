@@ -59,6 +59,7 @@ All colors MUST be HSL.
   * {
     /* Set border color from the design token instead of using Tailwind @apply */
     border-color: hsl(var(--border));
+    box-sizing: border-box; /* Add box-sizing to ensure proper layout */
   }
 
   body {
