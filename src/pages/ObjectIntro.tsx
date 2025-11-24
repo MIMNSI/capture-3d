@@ -14,11 +14,12 @@ const ObjectIntro = () => {
     }, 300);
   };
 
-  if (showTutorial) {
-    return <InstagramStoryTutorial onComplete={handleTutorialComplete} />;
-  }
-
-  return null;
+  return (
+    <InstagramStoryTutorial
+      isOpen={showTutorial}
+      onComplete={handleTutorialComplete}
+    />
+  );
 };
 
 export default ObjectIntro;

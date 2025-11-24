@@ -1,85 +1,66 @@
+@import url('https://fonts.googleapis.com/css2?family=Geist:wght@100..900&display=swap');
+
 @tailwind base;
 @tailwind components;
-/* stylelint-disable-next-line at-rule-no-unknown */
 @tailwind utilities;
-
-/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
-All colors MUST be HSL.
-*/
 
 @layer base {
   :root {
-    --background: 0 0% 4%; /* Near Black #0A0A0A */
-    --foreground: 0 0% 100%; /* Pure White #FFFFFF */
+    --background: 0 0% 3.9%; /* Near Black */
+    --foreground: 0 0% 90%;   /* Very Light Grey */
 
-    --card: 0 0% 10%; /* Dark Grey #1A1A1A */
-    --card-foreground: 0 0% 100%; /* Pure White #FFFFFF */
+    --card: 0 0% 10%;         /* Dark Grey */
+    --card-foreground: 0 0% 90%;   /* Very Light Grey */
+    
+    --popover: 0 0% 10%;         /* Dark Grey */
+    --popover-foreground: 0 0% 90%;   /* Very Light Grey */
 
-    --popover: 0 0% 10%; /* Dark Grey #1A1A1A */
-    --popover-foreground: 0 0% 100%; /* Pure White #FFFFFF */
+    /* Mint Green */
+    --primary: 153 98% 57%;
+    --primary-foreground: 0 0% 10%; /* Dark Grey */
 
-    --primary: 150 100% 53%; /* Mint Green #2DFFA7 */
-    --primary-foreground: 0 0% 4%; /* Near Black #0A0A0A */
+    /* Medium Grey */
+    --secondary: 0 0% 27%;
+    --secondary-foreground: 0 0% 98%; /* Pure White */
 
-    --secondary: 0 0% 10%; /* Dark Grey #1A1A1A */
-    --secondary-foreground: 0 0% 100%; /* Pure White #FFFFFF */
+    /* Medium Dark Grey */
+    --muted: 0 0% 20%;
+    --muted-foreground: 0 0% 70%; /* Light Grey */
 
-    --muted: 0 0% 10%; /* Dark Grey #1A1A1A */
-    --muted-foreground: 0 0% 70%; /* Light Grey #B3B3B3 */
+    /* Medium Grey */
+    --accent: 0 0% 27%;
+    --accent-foreground: 0 0% 98%; /* Pure White */
 
-    --accent: 150 100% 53%; /* Mint Green #2DFFA7 */
-    --accent-foreground: 0 0% 4%; /* Near Black #0A0A0A */
+    /* Destructive color (can be customized) */
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 98%;
 
-    --destructive: 0 70% 55%; /* Keep existing */
-    --destructive-foreground: 0 0% 100%; /* Pure White #FFFFFF */
-
-    --border: 0 0% 20%; /* Medium Dark Grey #333333 */
-    --input: 0 0% 20%; /* Medium Dark Grey #333333 */
-    --ring: 150 100% 53%; /* Mint Green #2DFFA7 */
+    /* Medium Dark Grey */
+    --border: 0 0% 20%;
+    --input: 0 0% 20%;
+    --ring: 153 98% 57%; /* Mint Green */
 
     --radius: 0.75rem;
-
-    /* Custom tokens for 3D capture app */
-    --neon: 150 100% 53%; /* Mint Green #2DFFA7 */
-    --neon-glow: 150 100% 40%; /* Adjusted Mint Green for glow */
-    --surface: 0 0% 10%; /* Dark Grey #1A1A1A */
-    --surface-elevated: 0 0% 20%; /* Medium Dark Grey #333333 */
-    --overlay: 0 0% 4%; /* Near Black #0A0A0A */
-    
-    --gradient-primary: linear-gradient(135deg, hsl(150 100% 53%) 0%, hsl(170 100% 50%) 100%); /* Adjusted for Mint Green */
-    --gradient-dark: linear-gradient(180deg, hsl(0 0% 4%) 0%, hsl(0 0% 10%) 100%); /* Adjusted for Near Black/Dark Grey */
-    
-    --shadow-neon: 0 0 20px hsl(150 100% 53% / 0.3); /* Adjusted for Mint Green */
-    --shadow-elevated: 0 10px 40px hsl(0 0% 4% / 0.5); /* Adjusted for Near Black */
-
   }
 }
 
 @layer base {
   * {
-    /* Set border color from the design token instead of using Tailwind @apply */
-    border-color: hsl(var(--border));
-    box-sizing: border-box;
-    margin: 0;
-    padding: 0;
-    -webkit-tap-highlight-color: transparent;
-    -webkit-touch-callout: none;
-    touch-action: manipulation;
+    @apply border-border;
   }
-
   body {
-    /* Use the CSS design-system variables directly */
-    background-color: hsl(var(--background));
-    color: hsl(var(--foreground));
-    overscroll-behavior-y: contain; /* Prevent pull-to-refresh on mobile */
+    @apply bg-background text-foreground;
+    font-family: "Geist", "Inter", sans-serif; /* Apply Geist Font globally */
+    font-feature-settings: "rlig" 1, "calt" 1;
   }
 }
 
-/* Safe area handling for iOS */
-.pt-safe-or-6 {
-  padding-top: max(env(safe-area-inset-top), 1.5rem);
-}
-
-.pb-safe-or-6 {
-  padding-bottom: max(env(safe-area-inset-bottom), 1.5rem);
+/* Utility for 'Do' and 'Don't' badges */
+@layer components {
+  .badge-do {
+    @apply absolute top-4 right-4 bg-green-500/90 text-white px-3 py-1 rounded-full text-sm font-bold shadow-lg backdrop-blur-sm z-10 flex items-center gap-2;
+  }
+  .badge-dont {
+    @apply absolute top-4 left-4 bg-red-500/90 text-white px-3 py-1 rounded-full text-sm font-bold shadow-lg backdrop-blur-sm z-10 flex items-center gap-2;
+  }
 }

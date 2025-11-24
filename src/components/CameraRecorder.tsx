@@ -5,6 +5,21 @@ import { Play, Pause, Square, RotateCw, CheckCircle } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
+// Custom hook to check screen orientation
+const useScreenOrientation = () => {
+  const [isLandscape, setIsLandscape] = useState(window.innerWidth > window.innerHeight);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsLandscape(window.innerWidth > window.innerHeight);
+    };
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  return isLandscape;
+};
+
 interface CameraRecorderProps {
   onRecordingComplete: (blob: Blob) => void;
   minDuration?: number; // seconds
@@ -19,6 +34,23 @@ export const CameraRecorder = ({ onRecordingComplete, minDuration = 12 }: Camera
   const [status, setStatus] = useState<"idle" | "recording" | "paused" | "stopped">("idle");
   const [elapsed, setElapsed] = useState(0);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const isLandscape = useScreenOrientation();
+
+  // Enforce Landscape Mode
+  useEffect(() => {
+    if (screen.orientation && 'lock' in screen.orientation) {
+      (screen.orientation as any).lock("landscape").catch(() => {
+        console.warn("Screen orientation lock failed.");
+      });
+    }
+
+    return () => {
+      // Unlock on component unmount
+      if (screen.orientation && 'unlock' in screen.orientation) {
+        (screen.orientation as any).unlock();
+      }
+    };
+  }, []);
 
   // Initialize Camera
   useEffect(() => {
@@ -141,13 +173,25 @@ export const CameraRecorder = ({ onRecordingComplete, minDuration = 12 }: Camera
   };
 
   return (
-    <div className="relative w-full h-full flex flex-col bg-black">
+    <div className="relative w-full h-full flex flex-row bg-black">
+      
+      {/* Orientation Enforcer Message */}
+      {!isLandscape && (
+        <div className="absolute inset-0 bg-background/90 backdrop-blur-md z-50 flex flex-col items-center justify-center text-foreground">
+          <RotateCw className="w-16 h-16 mb-6 animate-pulse" />
+          <h2 className="text-2xl font-bold mb-2">Please Rotate Your Device</h2>
+          <p className="text-muted-foreground max-w-xs text-center">
+            This experience is designed to be used in landscape mode for the best results.
+          </p>
+        </div>
+      )}
+
       {/* Video Viewport */}
       <div className="relative flex-1 overflow-hidden bg-black">
         {previewUrl ? (
           <video src={previewUrl} controls playsInline className="w-full h-full object-contain" />
         ) : (
-          <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
+          <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-contain" />
         )}
         
         {/* Overlays (Only show when live camera is active) */}
@@ -159,7 +203,7 @@ export const CameraRecorder = ({ onRecordingComplete, minDuration = 12 }: Camera
             </div>
             
             {/* Timer HUD */}
-            <div className="absolute top-4 left-0 right-0 flex justify-center pointer-events-none">
+            <div className="absolute top-4 left-1/2 -translate-x-1/2 flex justify-center pointer-events-none">
               <div className="bg-black/50 backdrop-blur px-4 py-1.5 rounded-full text-white font-mono font-bold flex items-center gap-2 shadow-lg">
                 <div className={cn("w-3 h-3 rounded-full transition-colors", status === "recording" ? "bg-red-500 animate-pulse" : "bg-zinc-500")} />
                 {formatTime(elapsed)}
@@ -168,7 +212,7 @@ export const CameraRecorder = ({ onRecordingComplete, minDuration = 12 }: Camera
 
             {/* Min Duration Warning */}
             {elapsed > 0 && elapsed < minDuration && status !== "idle" && (
-               <div className="absolute bottom-4 left-0 right-0 text-center pointer-events-none animate-in fade-in slide-in-from-bottom-2">
+               <div className="absolute bottom-4 left-1/2 -translate-x-1/2 text-center pointer-events-none animate-in fade-in">
                  <span className="text-white text-sm font-semibold px-3 py-1 bg-red-500/80 backdrop-blur-sm rounded-full shadow-sm">
                    Keep recording... ({minDuration - elapsed}s left)
                  </span>
@@ -178,20 +222,28 @@ export const CameraRecorder = ({ onRecordingComplete, minDuration = 12 }: Camera
         )}
       </div>
 
-      {/* Controls Bar */}
-      <div className="h-32 bg-background/90 backdrop-blur-xl flex items-center justify-center p-6 border-t border-border">
+      {/* Controls Bar (Vertical on the right) */}
+      <div className="w-32 bg-background/90 backdrop-blur-xl flex flex-col items-center justify-center p-4 border-l border-border">
         {status === "idle" && (
-          <Button 
-            onClick={startRecording} 
-            size="icon" 
+          <Button
+            onClick={startRecording}
+            size="icon"
             className="w-20 h-20 rounded-full bg-red-600 hover:bg-red-700 border-4 border-background ring-2 ring-red-600/50 transition-all hover:scale-105 active:scale-95 shadow-lg"
           >
-            <div className="w-8 h-8 bg-white rounded-sm shadow-sm" /> 
+            <div className="w-8 h-8 bg-white rounded-sm shadow-sm" />
           </Button>
         )}
 
         {(status === "recording" || status === "paused") && (
-          <div className="flex items-center gap-8 animate-in fade-in zoom-in-95 duration-200">
+          <div className="flex flex-col items-center gap-6 animate-in fade-in zoom-in-95 duration-200">
+             <Button
+              onClick={stopRecording}
+              size="icon"
+              className="w-20 h-20 rounded-full bg-red-600 hover:bg-red-700 transition-all hover:scale-105 active:scale-95 shadow-lg"
+            >
+              <Square className="w-8 h-8 fill-current text-white" />
+            </Button>
+
             {status === "recording" ? (
               <Button onClick={pauseRecording} variant="secondary" size="icon" className="w-14 h-14 rounded-full shadow-md">
                 <Pause className="w-6 h-6" />
@@ -201,30 +253,18 @@ export const CameraRecorder = ({ onRecordingComplete, minDuration = 12 }: Camera
                 <Play className="w-6 h-6 ml-1" />
               </Button>
             )}
-
-            <Button 
-              onClick={stopRecording} 
-              size="icon" 
-              className="w-20 h-20 rounded-full bg-red-600 hover:bg-red-700 transition-all hover:scale-105 active:scale-95 shadow-lg"
-            >
-              <Square className="w-8 h-8 fill-current text-white" />
-            </Button>
           </div>
         )}
 
         {status === "stopped" && previewUrl && (
-          <div className="flex items-center gap-4 w-full max-w-sm animate-in fade-in slide-in-from-bottom-4">
-            <Button onClick={handleRetake} variant="outline" className="flex-1 py-6 text-base border-2">
-              <RotateCw className="mr-2 w-4 h-4" />
-              Retake
-            </Button>
-            <Button 
-              onClick={handleAccept} 
-              className="flex-1 py-6 text-base font-semibold"
-              disabled={elapsed < minDuration}
-            >
+          <div className="flex flex-col items-center gap-4 w-full animate-in fade-in">
+            <Button onClick={handleAccept} className="w-full py-4 text-base font-semibold">
               <CheckCircle className="mr-2 w-4 h-4" />
               Use Video
+            </Button>
+            <Button onClick={handleRetake} variant="outline" className="w-full py-4 text-base">
+              <RotateCw className="mr-2 w-4 h-4" />
+              Retake
             </Button>
           </div>
         )}

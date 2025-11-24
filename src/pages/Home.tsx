@@ -10,7 +10,7 @@ const Home = () => {
       <div className="w-full max-w-md space-y-8">
         {/* Header */}
         <div className="text-center space-y-2">
-          <h1 className="text-4xl font-bold tracking-tighter bg-gradient-to-br from-white to-white/60 bg-clip-text text-transparent">
+          <h1 className="text-4xl font-bold tracking-tighter bg-gradient-to-br from-primary to-foreground bg-clip-text text-transparent">
             Capture 3D
           </h1>
           <p className="text-muted-foreground">

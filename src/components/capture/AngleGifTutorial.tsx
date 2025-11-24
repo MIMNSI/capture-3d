@@ -17,8 +17,7 @@ const angleData = {
       "Keep object centered in frame"
     ],
     // Placeholder: Replace with actual GIF path when available
-    gifUrl: "/assets/tutorials/middle-angle.gif",
-    color: "from-blue-600 to-blue-800"
+    gifUrl: "/assets/tutorials/middle-angle.gif"
   },
   top: {
     title: "Top Angle",
@@ -29,8 +28,7 @@ const angleData = {
       "Walk in a circle around object",
       "Keep object fully visible"
     ],
-    gifUrl: "/assets/tutorials/top-angle.gif",
-    color: "from-purple-600 to-purple-800"
+    gifUrl: "/assets/tutorials/top-angle.gif"
   },
   bottom: {
     title: "Bottom Angle",
@@ -41,8 +39,7 @@ const angleData = {
       "Walk in a circle around object",
       "Capture underside details"
     ],
-    gifUrl: "/assets/tutorials/bottom-angle.gif",
-    color: "from-green-600 to-green-800"
+    gifUrl: "/assets/tutorials/bottom-angle.gif"
   }
 };
 
@@ -51,24 +48,24 @@ const AngleGifTutorial = ({ angle, onStart }: AngleGifTutorialProps) => {
 
   useEffect(() => {
     // Lock screen to portrait for tutorial
-    if (screen.orientation && 'lock' in screen.orientation) {
-      (screen.orientation as any).lock("portrait").catch(() => {
+    if (screen.orientation && "lock" in screen.orientation) {
+      (screen.orientation as any).lock("landscape").catch(() => {
         console.log("Screen orientation lock not supported");
       });
     }
   }, []);
 
   return (
-    <div className={`fixed inset-0 bg-gradient-to-br ${data.color} z-50 flex flex-col text-white`}>
+    <div className="fixed inset-0 bg-background z-50 flex flex-col text-foreground">
       {/* Header */}
-      <div className="p-4 sm:p-6 text-center border-b border-white/20 bg-black/20">
+      <div className="p-4 sm:p-6 text-center border-b border-border bg-card">
         <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-2">{data.title}</h1>
-        <p className="text-sm sm:text-base md:text-lg text-white/80">{data.subtitle}</p>
+        <p className="text-sm sm:text-base md:text-lg text-muted-foreground">{data.subtitle}</p>
       </div>
 
       {/* GIF Preview */}
       <div className="flex-1 flex flex-col items-center justify-center p-4 sm:p-6">
-        <div className="w-full max-w-md aspect-video bg-black/30 rounded-2xl overflow-hidden mb-6 shadow-2xl border border-white/20">
+        <div className="w-full max-w-md aspect-video bg-card rounded-2xl overflow-hidden mb-6 shadow-2xl border border-border">
           {/* Placeholder for GIF - will show image if exists, otherwise placeholder */}
           <img 
             src={data.gifUrl} 
@@ -83,12 +80,12 @@ const AngleGifTutorial = ({ angle, onStart }: AngleGifTutorialProps) => {
 
         {/* Instructions */}
         <div className="w-full max-w-md">
-          <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 sm:p-6 border border-white/20 shadow-xl">
-            <h3 className="text-white font-bold text-lg sm:text-xl mb-4">Instructions:</h3>
+          <div className="bg-card backdrop-blur-md rounded-2xl p-4 sm:p-6 border border-border shadow-xl">
+            <h3 className="text-foreground font-bold text-lg sm:text-xl mb-4">Instructions:</h3>
             <ul className="space-y-3">
               {data.instructions.map((instruction, i) => (
-                <li key={i} className="flex items-start gap-3 text-sm sm:text-base text-white/90">
-                  <span className="flex-shrink-0 w-6 h-6 rounded-full bg-white/20 flex items-center justify-center text-xs font-bold">
+                <li key={i} className="flex items-start gap-3 text-sm sm:text-base text-muted-foreground">
+                  <span className="flex-shrink-0 w-6 h-6 rounded-full bg-secondary text-secondary-foreground flex items-center justify-center text-xs font-bold">
                     {i + 1}
                   </span>
                   <span>{instruction}</span>
@@ -100,15 +97,15 @@ const AngleGifTutorial = ({ angle, onStart }: AngleGifTutorialProps) => {
       </div>
 
       {/* Start Button */}
-      <div className="p-4 sm:p-6 bg-black/20 border-t border-white/20">
-        <Button 
+      <div className="p-4 sm:p-6 bg-card border-t border-border">
+        <Button
           onClick={onStart}
           size="lg"
-          className="w-full h-14 sm:h-16 text-base sm:text-lg font-bold bg-white text-gray-900 hover:bg-white/90 shadow-xl"
+          className="w-full h-14 sm:h-16 text-base sm:text-lg font-bold bg-primary text-primary-foreground hover:bg-primary/90 shadow-xl"
         >
           Start Recording (30 seconds)
         </Button>
-        <p className="text-center text-xs sm:text-sm text-white/60 mt-3">
+        <p className="text-center text-xs sm:text-sm text-muted-foreground mt-3">
           Camera will open in landscape mode
         </p>
       </div>

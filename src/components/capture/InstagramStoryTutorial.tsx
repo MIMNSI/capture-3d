@@ -1,148 +1,137 @@
 import { useState, useEffect } from "react";
-import { Lightbulb, Camera, Move, Sun, XCircle } from "lucide-react";
+import { X, Check, XCircle } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+
+// White placeholder image
+const WHITE_PLACEHOLDER = "https://placehold.co/600x800/FFFFFF/000?text=Image";
+
+interface Topic {
+  id: number;
+  title: string;
+  goodImg: string;
+  badImg: string;
+}
+
+const topics: Topic[] = [
+  { id: 1, title: "Lighting", goodImg: WHITE_PLACEHOLDER, badImg: WHITE_PLACEHOLDER },
+  { id: 2, title: "Framing", goodImg: WHITE_PLACEHOLDER, badImg: WHITE_PLACEHOLDER },
+  { id: 3, title: "Distance", goodImg: WHITE_PLACEHOLDER, badImg: WHITE_PLACEHOLDER },
+  { id: 4, title: "Movement", goodImg: WHITE_PLACEHOLDER, badImg: WHITE_PLACEHOLDER },
+  { id: 5, title: "Angles", goodImg: WHITE_PLACEHOLDER, badImg: WHITE_PLACEHOLDER },
+];
 
 interface InstagramStoryTutorialProps {
   onComplete: () => void;
+  isOpen: boolean;
 }
 
-const slides = [
-  {
-    icon: Lightbulb,
-    title: "Good Lighting",
-    dos: ["Use natural daylight", "Even lighting on object", "Bright environment"],
-    donts: ["Avoid dark shadows", "No strong backlight", "No direct harsh light"],
-    bgColor: "from-blue-600 to-blue-800"
-  },
-  {
-    icon: Camera,
-    title: "Steady Recording",
-    dos: ["Keep phone stable", "Move slowly", "Smooth movements"],
-    donts: ["Don't shake phone", "No sudden movements", "Avoid quick pans"],
-    bgColor: "from-purple-600 to-purple-800"
-  },
-  {
-    icon: Move,
-    title: "Walk Around Object",
-    dos: ["Walk in a circle", "Keep same distance", "Complete 360°"],
-    donts: ["Don't spin object", "Don't change distance", "Don't walk backwards"],
-    bgColor: "from-green-600 to-green-800"
-  },
-  {
-    icon: Sun,
-    title: "Object Placement",
-    dos: ["Place on plain surface", "Clear background", "Good contrast"],
-    donts: ["Avoid cluttered area", "No reflective surfaces", "No moving objects"],
-    bgColor: "from-orange-600 to-orange-800"
-  },
-  {
-    icon: XCircle,
-    title: "Common Mistakes",
-    dos: ["Record all 3 angles", "Keep object centered", "Full 30 seconds each"],
-    donts: ["Don't skip angles", "Don't rush recording", "Don't cut it short"],
-    bgColor: "from-red-600 to-red-800"
-  }
-];
-
-const InstagramStoryTutorial = ({ onComplete }: InstagramStoryTutorialProps) => {
-  const [currentSlide, setCurrentSlide] = useState(0);
+const InstagramStoryTutorial = ({ onComplete, isOpen }: InstagramStoryTutorialProps) => {
+  const [index, setIndex] = useState(0);
   const [progress, setProgress] = useState(0);
-  
-  const SLIDE_DURATION = 3000; // 3 seconds
-  const TICK_RATE = 50;
 
+  // Reset on open
   useEffect(() => {
-    let startTime = Date.now();
-    
-    const timer = setInterval(() => {
-      const elapsed = Date.now() - startTime;
-      const pct = Math.min((elapsed / SLIDE_DURATION) * 100, 100);
-      setProgress(pct);
+    if (!isOpen) return;
+    setIndex(0);
+    setProgress(0);
+  }, [isOpen]);
 
-      if (elapsed >= SLIDE_DURATION) {
-        if (currentSlide < slides.length - 1) {
-          setCurrentSlide(prev => prev + 1);
-          setProgress(0);
-          startTime = Date.now();
-        } else {
-          clearInterval(timer);
-          onComplete();
+  // Auto slide
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const duration = 3000;
+    const interval = 50;
+    const step = 100 / (duration / interval);
+
+    const timer = setInterval(() => {
+      setProgress((prev) => {
+        if (prev >= 100) {
+          nextTopic();
+          return 0;
         }
-      }
-    }, TICK_RATE);
+        return prev + step;
+      });
+    }, interval);
 
     return () => clearInterval(timer);
-  }, [currentSlide, onComplete]);
+  }, [index, isOpen]);
 
-  const slide = slides[currentSlide];
-  const Icon = slide.icon;
+  const nextTopic = () => {
+    if (index < topics.length - 1) {
+      setIndex((prev) => prev + 1);
+      setProgress(0);
+    } else {
+      onComplete();
+    }
+  };
+
+  const current = topics[index];
 
   return (
-    <div className={`fixed inset-0 bg-gradient-to-br ${slide.bgColor} z-50 flex flex-col text-white transition-all duration-500`}>
-      {/* Progress bars (Instagram Story Style) */}
-      <div className="flex gap-1 p-3 pt-6">
-        {slides.map((_, index) => (
-          <div
-            key={index}
-            className="flex-1 h-0.5 bg-white/30 rounded-full overflow-hidden"
-          >
+    <div className={cn("fixed inset-0 z-50 bg-black flex flex-col", !isOpen && "hidden")}>
+      
+      {/* Progress bars */}
+      <div className="absolute top-4 left-2 right-2 flex gap-1 z-20">
+        {topics.map((t, i) => (
+          <div key={t.id} className="h-1 flex-1 bg-white/20 rounded-full overflow-hidden">
             <div
-              className="h-full bg-white transition-all ease-linear"
-              style={{ 
-                width: index < currentSlide ? '100%' : index === currentSlide ? `${progress}%` : '0%' 
+              className="h-full bg-white transition-all duration-100 ease-linear"
+              style={{
+                width: i < index ? "100%" : i === index ? `${progress}%` : "0%",
               }}
             />
           </div>
         ))}
       </div>
 
-      {/* Content */}
-      <div className="flex-1 flex flex-col items-center justify-start p-4 sm:p-6 md:p-8 pt-8 animate-fade-in overflow-y-auto">
-        <div className="w-20 h-20 sm:w-24 sm:h-24 md:w-28 md:h-28 mb-6 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center shadow-2xl">
-          <Icon className="w-10 h-10 sm:w-12 sm:h-12 md:w-14 md:h-14 text-white" strokeWidth={2} />
-        </div>
+      {/* Close button */}
+      <div className="absolute top-8 right-4 z-20">
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={onComplete}
+          className="text-white hover:bg-white/20"
+        >
+          <X className="w-6 h-6" />
+        </Button>
+      </div>
 
-        <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-white mb-6 sm:mb-8 text-center tracking-tight">
-          {slide.title}
+      {/* MAIN CONTENT */}
+      <div className="flex-1 relative flex flex-col justify-center items-center p-6">
+
+        {/* TITLE */}
+        <h2 className="text-3xl font-bold text-white mb-6 text-center animate-fade-in">
+          {current.title}
         </h2>
 
-        {/* DO's Section */}
-        <div className="w-full max-w-sm mb-6">
-          <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 sm:p-5 border border-white/20 shadow-xl">
-            <h3 className="text-green-300 font-bold text-base sm:text-lg mb-3 flex items-center gap-2">
-              <span className="text-xl">✓</span> DO's
-            </h3>
-            <ul className="space-y-2">
-              {slide.dos.map((item, i) => (
-                <li key={i} className="flex items-start gap-2 text-sm sm:text-base text-white/90">
-                  <span className="text-green-400 mt-0.5">•</span>
-                  <span>{item}</span>
-                </li>
-              ))}
-            </ul>
+        {/* GOOD IMAGE */}
+        <div className="relative w-full max-w-sm h-56 bg-white rounded-xl overflow-hidden shadow-lg animate-slide-up">
+          <img src={current.goodImg} className="w-full h-full object-cover" alt="Good" />
+
+          <div className="absolute top-2 right-2 bg-white rounded-full p-1 shadow">
+            <Check className="text-green-600 w-6 h-6" />
+          </div>
+
+          <div className="absolute bottom-2 left-2 bg-green-600 text-white text-sm px-2 py-1 rounded">
+            Correct
           </div>
         </div>
 
-        {/* DON'Ts Section */}
-        <div className="w-full max-w-sm">
-          <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 sm:p-5 border border-white/20 shadow-xl">
-            <h3 className="text-red-300 font-bold text-base sm:text-lg mb-3 flex items-center gap-2">
-              <span className="text-xl">✕</span> DON'Ts
-            </h3>
-            <ul className="space-y-2">
-              {slide.donts.map((item, i) => (
-                <li key={i} className="flex items-start gap-2 text-sm sm:text-base text-white/90">
-                  <span className="text-red-400 mt-0.5">•</span>
-                  <span>{item}</span>
-                </li>
-              ))}
-            </ul>
+        {/* BAD IMAGE */}
+        <div className="relative w-full max-w-sm h-56 bg-white mt-6 rounded-xl overflow-hidden shadow-lg animate-slide-up">
+          <img src={current.badImg} className="w-full h-full object-cover" alt="Bad" />
+
+          <div className="absolute top-2 right-2 bg-white rounded-full p-1 shadow">
+            <XCircle className="text-red-600 w-6 h-6" />
+          </div>
+
+          <div className="absolute bottom-2 left-2 bg-red-600 text-white text-sm px-2 py-1 rounded">
+            Incorrect
           </div>
         </div>
 
-        {/* Slide indicator */}
-        <div className="mt-8 text-white/60 text-xs sm:text-sm font-medium">
-          {currentSlide + 1} / {slides.length}
-        </div>
       </div>
     </div>
   );
