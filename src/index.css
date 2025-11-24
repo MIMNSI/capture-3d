@@ -59,12 +59,27 @@ All colors MUST be HSL.
   * {
     /* Set border color from the design token instead of using Tailwind @apply */
     border-color: hsl(var(--border));
-    box-sizing: border-box; /* Add box-sizing to ensure proper layout */
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
+    touch-action: manipulation;
   }
 
   body {
     /* Use the CSS design-system variables directly */
     background-color: hsl(var(--background));
     color: hsl(var(--foreground));
+    overscroll-behavior-y: contain; /* Prevent pull-to-refresh on mobile */
   }
+}
+
+/* Safe area handling for iOS */
+.pt-safe-or-6 {
+  padding-top: max(env(safe-area-inset-top), 1.5rem);
+}
+
+.pb-safe-or-6 {
+  padding-bottom: max(env(safe-area-inset-bottom), 1.5rem);
 }

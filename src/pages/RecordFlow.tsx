@@ -1,11 +1,11 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { CameraRecorder } from "../components/CameraRecorder";
 import { AngleHeader } from "../components/AngleHeader";
-import { TutorialModal } from "../components/TutorialModal";
+import AngleGifTutorial from "../components/capture/AngleGifTutorial";
 import { SavePreview } from "../components/SavePreview";
 import { performAutoCheck } from "../utils/autoCheck";
-import { concatVideos } from "../utils/videoConcat";
+import { mergeVideos, downloadVideo } from "../utils/videoMerge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "../components/ui/dialog";
 import { Button } from "../components/ui/button";
 import { toast } from "sonner";
@@ -17,10 +17,26 @@ const RecordFlow = () => {
   // State Management
   const [angleStep, setAngleStep] = useState<1 | 2 | 3>(1); // 1=Middle, 2=Top, 3=Bottom
   const [blobs, setBlobs] = useState<Blob[]>([]);
-  const [showTutorial, setShowTutorial] = useState(true); // Show tutorial for first angle immediately
+  const [showGifTutorial, setShowGifTutorial] = useState(true); // Show GIF tutorial before each angle
   const [isChecking, setIsChecking] = useState(false);
+  const [isMerging, setIsMerging] = useState(false);
   const [checkError, setCheckError] = useState<string[] | null>(null);
   const [finalBlob, setFinalBlob] = useState<Blob | null>(null);
+
+  // Lock orientation to landscape when camera is active
+  useEffect(() => {
+    if (!showGifTutorial && screen.orientation && 'lock' in screen.orientation) {
+      (screen.orientation as any).lock("landscape").catch(() => {
+        console.log("Landscape lock not supported");
+      });
+    }
+
+    return () => {
+      if (screen.orientation && 'unlock' in screen.orientation) {
+        (screen.orientation as any).unlock();
+      }
+    };
+  }, [showGifTutorial]);
 
   // Handler: Called when CameraRecorder finishes a valid take
   const handleRecordingComplete = async (blob: Blob) => {
@@ -47,7 +63,7 @@ const RecordFlow = () => {
     // 3. Decide next step
     if (angleStep < 3) {
       setAngleStep(prev => (prev + 1) as 1 | 2 | 3);
-      setShowTutorial(true); // Show tutorial for NEXT angle
+      setShowGifTutorial(true); // Show GIF tutorial for NEXT angle
     } else {
       // Finished all 3 angles -> Merge!
       processFinalVideo(newBlobs);
@@ -56,19 +72,26 @@ const RecordFlow = () => {
 
   // Logic: Merge all segments into one
   const processFinalVideo = async (allBlobs: Blob[]) => {
+    setIsMerging(true);
     try {
-      toast.info("Processing video...");
-      const concatenated = await concatVideos(allBlobs);
-      setFinalBlob(concatenated);
-      toast.success("3D Scan ready for preview!");
+      toast.info("Merging 3 videos into one...");
+      const merged = await mergeVideos(allBlobs);
+      setFinalBlob(merged);
+      
+      // Auto-download to device
+      downloadVideo(merged, `3d-scan-${Date.now()}.webm`);
+      
+      toast.success("3D Scan merged and downloaded!");
     } catch (e) {
-      toast.error("Failed to process video.");
+      toast.error("Failed to merge videos.");
       console.error(e);
+    } finally {
+      setIsMerging(false);
     }
   };
 
-  const handleTutorialStart = () => {
-    setShowTutorial(false);
+  const handleGifTutorialStart = () => {
+    setShowGifTutorial(false);
   };
 
   const handleRetryAngle = () => {
@@ -103,34 +126,44 @@ const RecordFlow = () => {
         </DialogContent>
       </Dialog>
 
-      {/* 2. Tutorial Modal (Instructions for current angle) */}
-      <TutorialModal 
-        isOpen={showTutorial} 
-        angle={angleStep === 1 ? "middle" : angleStep === 2 ? "top" : "bottom"} 
-        onStart={handleTutorialStart} 
-      />
+      {/* 2. GIF Tutorial (Full-screen tutorial before each angle) */}
+      {showGifTutorial && (
+        <AngleGifTutorial 
+          angle={angleStep === 1 ? "middle" : angleStep === 2 ? "top" : "bottom"} 
+          onStart={handleGifTutorialStart} 
+        />
+      )}
 
-      {/* 3. Checking Overlay (Loading state) */}
-      {isChecking && (
-        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center">
-          <div className="text-white flex flex-col items-center">
-            <Loader2 className="w-10 h-10 animate-spin mb-4 text-neon" />
-            <p>Analyzing recording quality...</p>
+      {/* 3. Checking/Merging Overlay (Loading state) */}
+      {(isChecking || isMerging) && (
+        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center backdrop-blur-sm">
+          <div className="text-white flex flex-col items-center p-6 bg-black/50 rounded-2xl border border-white/20">
+            <Loader2 className="w-12 h-12 sm:w-16 sm:h-16 animate-spin mb-4 text-primary" />
+            <p className="text-base sm:text-lg font-medium">
+              {isChecking ? "Analyzing recording quality..." : "Merging 3 videos..."}
+            </p>
+            {isMerging && (
+              <p className="text-xs sm:text-sm text-white/60 mt-2">This may take a moment</p>
+            )}
           </div>
         </div>
       )}
 
-      {/* 4. Main UI */}
-      <AngleHeader currentAngle={angleStep} />
-      
-      <div className="flex-1 relative">
-        {/* Key prop forces CameraRecorder to completely reset when angle changes */}
-        <CameraRecorder 
-          key={angleStep} 
-          onRecordingComplete={handleRecordingComplete}
-          minDuration={12}
-        />
-      </div>
+      {/* 4. Main UI (Only show when GIF tutorial is closed) */}
+      {!showGifTutorial && (
+        <>
+          <AngleHeader currentAngle={angleStep} />
+          
+          <div className="flex-1 relative">
+            {/* Key prop forces CameraRecorder to completely reset when angle changes */}
+            <CameraRecorder 
+              key={angleStep} 
+              onRecordingComplete={handleRecordingComplete}
+              minDuration={30}
+            />
+          </div>
+        </>
+      )}
     </div>
   );
 };
