@@ -3,7 +3,7 @@ import { Check, Volume2, VolumeX } from "lucide-react";
 
 interface RecordingRoundProps {
   round: number;
-  onComplete: () => void;
+  onComplete: (blob: Blob) => void; // UPDATED: Now accepts a blob
   stream: MediaStream | null;
 }
 
@@ -17,31 +17,20 @@ const RecordingRound = ({ round, onComplete, stream }: RecordingRoundProps) => {
   const [isRecording, setIsRecording] = useState(false);
   const [timeLeft, setTimeLeft] = useState(30);
   const [showComplete, setShowComplete] = useState(false);
-  const [audioEnabled, setAudioEnabled] = useState(true); // State to toggle audio
+  const [audioEnabled, setAudioEnabled] = useState(true);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
+  const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null); // Store the blob locally first
 
-  // Audio Instruction Logic (Web Speech API)
+  // Audio Instruction Logic
   useEffect(() => {
     if (!audioEnabled) return;
-
-    // Cancel any previous speech to avoid overlap
     window.speechSynthesis.cancel();
-
     const text = roundInstructions[round as keyof typeof roundInstructions];
     const utterance = new SpeechSynthesisUtterance(text);
-    
-    // Optional: Adjust voice properties
-    utterance.rate = 0.9; // Slightly slower for clarity
-    utterance.pitch = 1;
-    utterance.volume = 1;
-
+    utterance.rate = 0.9;
     window.speechSynthesis.speak(utterance);
-
-    // Cleanup on unmount or round change
-    return () => {
-      window.speechSynthesis.cancel();
-    };
+    return () => window.speechSynthesis.cancel();
   }, [round, audioEnabled]);
 
   // Timer Logic
@@ -57,31 +46,26 @@ const RecordingRound = ({ round, onComplete, stream }: RecordingRoundProps) => {
     return () => clearInterval(interval);
   }, [isRecording, timeLeft]);
 
-  // Determine supported mime type (Crucial for iOS vs Android/Desktop support)
   const getSupportedMimeType = () => {
     const types = [
       "video/webm;codecs=vp9",
       "video/webm;codecs=vp8",
       "video/webm",
-      "video/mp4", // iOS 14.5+
+      "video/mp4",
     ];
     return types.find(type => MediaRecorder.isTypeSupported(type)) || "";
   };
 
   const startRecording = () => {
     if (!stream) return;
-
-    // Cancel audio instructions when recording starts
     window.speechSynthesis.cancel();
 
     try {
       const mimeType = getSupportedMimeType();
-      console.log("Using mime type:", mimeType);
-
-      // Fallback options if preferred mime type fails or isn't found
       const options = mimeType ? { mimeType } : undefined;
-      
       const mediaRecorder = new MediaRecorder(stream, options);
+
+      chunksRef.current = []; // Reset chunks
 
       mediaRecorder.ondataavailable = (event) => {
         if (event.data.size > 0) {
@@ -91,31 +75,21 @@ const RecordingRound = ({ round, onComplete, stream }: RecordingRoundProps) => {
 
       mediaRecorder.onstop = () => {
         const blob = new Blob(chunksRef.current, { type: mimeType || 'video/webm' });
-        const url = URL.createObjectURL(blob);
-        
-        // Auto-save to gallery logic
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `3d-scan-round-${round}-${Date.now()}.${mimeType.includes('mp4') ? 'mp4' : 'webm'}`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        
-        chunksRef.current = [];
+        setRecordedBlob(blob); // Save blob to state
         setShowComplete(true);
         
-        // Auto advance after brief success message
+        // Wait briefly to show success message, then pass blob to parent
         setTimeout(() => {
-          onComplete(); 
-        }, 2500);
+          onComplete(blob); 
+        }, 2000);
       };
 
-      mediaRecorder.start(1000); // Request data every second
+      mediaRecorder.start(1000);
       mediaRecorderRef.current = mediaRecorder;
       setIsRecording(true);
     } catch (error) {
       console.error("Recording error:", error);
-      alert("Failed to start recording. Device might not support the format.");
+      alert("Failed to start recording.");
     }
   };
 
@@ -134,7 +108,6 @@ const RecordingRound = ({ round, onComplete, stream }: RecordingRoundProps) => {
             <Check className="w-10 h-10 text-black" strokeWidth={3} />
           </div>
           <h2 className="text-2xl font-bold text-white">Round {round} Saved!</h2>
-          <p className="text-white/70 text-sm">Preparing next round...</p>
         </div>
       </div>
     );
@@ -142,7 +115,7 @@ const RecordingRound = ({ round, onComplete, stream }: RecordingRoundProps) => {
 
   return (
     <>
-      {/* Instruction Banner & Audio Toggle */}
+      {/* Instruction Banner */}
       <div className="absolute top-20 left-0 right-0 flex flex-col items-center gap-2 pointer-events-none z-10">
         <div className="bg-black/60 backdrop-blur-md px-6 py-2 rounded-full border border-white/10 animate-fade-in flex items-center gap-3 pointer-events-auto">
           <p className="text-white font-medium text-center text-shadow-sm text-sm md:text-base">
@@ -153,42 +126,15 @@ const RecordingRound = ({ round, onComplete, stream }: RecordingRoundProps) => {
             onClick={() => setAudioEnabled(!audioEnabled)}
             className="p-1.5 rounded-full hover:bg-white/10 transition-colors"
           >
-            {audioEnabled ? (
-              <Volume2 className="w-4 h-4 text-neon" />
-            ) : (
-              <VolumeX className="w-4 h-4 text-white/50" />
-            )}
+            {audioEnabled ? <Volume2 className="w-4 h-4 text-neon" /> : <VolumeX className="w-4 h-4 text-white/50" />}
           </button>
         </div>
       </div>
 
-      {/* Center HUD Timer (Only during recording) */}
+      {/* Timer HUD */}
       {isRecording && (
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none">
           <div className="relative w-32 h-32">
-            <svg className="w-full h-full transform -rotate-90">
-              <circle
-                cx="64"
-                cy="64"
-                r="58"
-                stroke="currentColor"
-                strokeWidth="6"
-                fill="none"
-                className="text-white/20"
-              />
-              <circle
-                cx="64"
-                cy="64"
-                r="58"
-                stroke="currentColor"
-                strokeWidth="6"
-                fill="none"
-                className="text-neon transition-all duration-1000 linear"
-                strokeDasharray={`${2 * Math.PI * 58}`}
-                strokeDashoffset={`${2 * Math.PI * 58 * (1 - timeLeft / 30)}`}
-                strokeLinecap="round"
-              />
-            </svg>
             <div className="absolute inset-0 flex items-center justify-center">
               <span className="text-4xl font-black text-white drop-shadow-md font-mono">
                 {timeLeft}
@@ -198,7 +144,7 @@ const RecordingRound = ({ round, onComplete, stream }: RecordingRoundProps) => {
         </div>
       )}
 
-      {/* Bottom Controls */}
+      {/* Controls */}
       <div className="absolute bottom-0 left-0 right-0 p-10 flex flex-col items-center justify-end pointer-events-auto bg-gradient-to-t from-black/90 via-black/40 to-transparent min-h-[200px]">
         {!isRecording ? (
           <div className="flex flex-col items-center gap-4 animate-fade-in">
