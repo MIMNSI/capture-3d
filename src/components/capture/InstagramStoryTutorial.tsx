@@ -99,36 +99,37 @@ const InstagramStoryTutorial = ({ onComplete, isOpen }: InstagramStoryTutorialPr
       </div>
 
       {/* MAIN CONTENT */}
-      <div className="flex-1 relative flex flex-col justify-center items-center p-6">
+      <div className="flex-1 relative flex flex-col md:flex-row justify-center items-center p-6 gap-8">
 
         {/* TITLE */}
-        <h2 className="text-3xl font-bold text-white mb-6 text-center animate-fade-in">
-          {current.title}
-        </h2>
-
-        {/* GOOD IMAGE */}
-        <div className="relative w-full max-w-sm h-56 bg-white rounded-xl overflow-hidden shadow-lg animate-slide-up">
-          <img src={current.goodImg} className="w-full h-full object-cover" alt="Good" />
-
-          <div className="absolute top-2 right-2 bg-white rounded-full p-1 shadow">
-            <Check className="text-green-600 w-6 h-6" />
-          </div>
-
-          <div className="absolute bottom-2 left-2 bg-green-600 text-white text-sm px-2 py-1 rounded">
-            Correct
-          </div>
+        <div className="w-full md:w-1/3 text-center md:text-left">
+          <h2 className="text-3xl md:text-5xl font-bold text-white mb-6 animate-fade-in">
+            {current.title}
+          </h2>
         </div>
 
-        {/* BAD IMAGE */}
-        <div className="relative w-full max-w-sm h-56 bg-white mt-6 rounded-xl overflow-hidden shadow-lg animate-slide-up">
-          <img src={current.badImg} className="w-full h-full object-cover" alt="Bad" />
-
-          <div className="absolute top-2 right-2 bg-white rounded-full p-1 shadow">
-            <XCircle className="text-red-600 w-6 h-6" />
+        {/* IMAGES */}
+        <div className="flex items-center justify-center gap-4">
+          {/* GOOD IMAGE */}
+          <div className="relative w-40 h-56 bg-white rounded-xl overflow-hidden shadow-lg animate-slide-up">
+            <img src={current.goodImg} className="w-full h-full object-cover" alt="Good" />
+            <div className="absolute top-2 right-2 bg-white rounded-full p-1 shadow">
+              <Check className="text-green-600 w-6 h-6" />
+            </div>
+            <div className="absolute bottom-2 left-2 bg-green-600 text-white text-sm px-2 py-1 rounded">
+              Correct
+            </div>
           </div>
 
-          <div className="absolute bottom-2 left-2 bg-red-600 text-white text-sm px-2 py-1 rounded">
-            Incorrect
+          {/* BAD IMAGE */}
+          <div className="relative w-40 h-56 bg-white rounded-xl overflow-hidden shadow-lg animate-slide-up">
+            <img src={current.badImg} className="w-full h-full object-cover" alt="Bad" />
+            <div className="absolute top-2 right-2 bg-white rounded-full p-1 shadow">
+              <XCircle className="text-red-600 w-6 h-6" />
+            </div>
+            <div className="absolute bottom-2 left-2 bg-red-600 text-white text-sm px-2 py-1 rounded">
+              Incorrect
+            </div>
           </div>
         </div>
 

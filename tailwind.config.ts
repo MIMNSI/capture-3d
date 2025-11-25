@@ -19,6 +19,9 @@ export default {
       },
     },
     extend: {
+      screens: {
+        'landscape': { 'raw': '(orientation: landscape)' },
+      },
       fontFamily: {
         sans: ["Geist", "Inter", "sans-serif"],
       },

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import InstagramStoryTutorial from "@/components/capture/InstagramStoryTutorial";
+import OrientationLock from "@/components/OrientationLock";
 
 const ObjectIntro = () => {
   const navigate = useNavigate();
@@ -15,10 +16,14 @@ const ObjectIntro = () => {
   };
 
   return (
-    <InstagramStoryTutorial
-      isOpen={showTutorial}
-      onComplete={handleTutorialComplete}
-    />
+    <>
+      <OrientationLock>
+        <InstagramStoryTutorial
+          isOpen={showTutorial}
+          onComplete={handleTutorialComplete}
+        />
+      </OrientationLock>
+    </>
   );
 };
 

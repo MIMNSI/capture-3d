@@ -7,6 +7,7 @@ import Home from "./pages/Home";
 import ObjectIntro from "./pages/ObjectIntro";
 import RecordFlow from "./pages/RecordFlow";
 import NotFound from "./pages/NotFound";
+import OrientationLock from "./components/OrientationLock";
 
 const queryClient = new QueryClient();
 
@@ -19,7 +20,7 @@ const App = () => (
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/object-intro" element={<ObjectIntro />} />
-          <Route path="/record" element={<RecordFlow />} />
+          <Route path="/record" element={<OrientationLock><RecordFlow /></OrientationLock>} />
           
           <Route path="*" element={<NotFound />} />
         </Routes>

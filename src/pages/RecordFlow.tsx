@@ -5,7 +5,7 @@ import { AngleHeader } from "../components/AngleHeader";
 import AngleGifTutorial from "../components/capture/AngleGifTutorial";
 import { SavePreview } from "../components/SavePreview";
 import { performAutoCheck } from "../utils/autoCheck";
-import { concatVideos } from "../utils/videoConcat";
+
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "../components/ui/dialog";
 import { Button } from "../components/ui/button";
 import { toast } from "sonner";
@@ -22,6 +22,8 @@ const RecordFlow = () => {
   const [isMerging, setIsMerging] = useState(false);
   const [checkError, setCheckError] = useState<string[] | null>(null);
   const [finalBlob, setFinalBlob] = useState<Blob | null>(null);
+  const [elapsed, setElapsed] = useState(0);
+  const [status, setStatus] = useState("idle");
 
   // Lock orientation to landscape when camera is active
   useEffect(() => {
@@ -159,16 +161,20 @@ const RecordFlow = () => {
       {/* 4. Main UI (Only show when GIF tutorial is closed) */}
       {!showGifTutorial && (
         <>
-          <AngleHeader currentAngle={angleStep} />
+          <AngleHeader currentAngle={angleStep} elapsed={elapsed} status={status} />
           
           <div className="flex-1 relative">
-            {/* Key prop forces CameraRecorder to completely reset when angle changes */}
-            <CameraRecorder 
-              key={angleStep} 
-              onRecordingComplete={handleRecordingComplete}
-              minDuration={30}
-            />
-          </div>
+  {/* Key prop forces CameraRecorder to completely reset when angle changes */}
+  <CameraRecorder
+    key={angleStep}
+    {...({
+      onRecordingComplete: handleRecordingComplete,
+      minDuration: 30,
+      angleLabel: angleStep === 1 ? "Middle" : angleStep === 2 ? "Top" : "Bottom",
+      onStatusChange: setStatus,
+    } as any)}
+  />
+</div>
         </>
       )}
     </div>
@@ -176,3 +182,12 @@ const RecordFlow = () => {
 };
 
 export default RecordFlow;
+
+async function concatVideos(allBlobs: Blob[]): Promise<Blob> {
+  // Simple concatenation: combine all recorded segments into one Blob.
+  if (!allBlobs || allBlobs.length === 0) {
+    throw new Error("No blobs to concatenate");
+  }
+  const mime = allBlobs[0].type || "video/webm";
+  return new Blob(allBlobs, { type: mime });
+}

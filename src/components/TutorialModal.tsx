@@ -49,15 +49,16 @@ export const TutorialModal = ({ isOpen, onStart, angle }: TutorialModalProps) =>
           <DialogDescription>Follow these steps for the best 3D result.</DialogDescription>
         </DialogHeader>
         
-        <div className="grid gap-4 py-4">
-          <div className="flex justify-center py-4">
-             {/* Simple CSS animation for visual guidance */}
-             <div className="w-24 h-24 rounded-full border-4 border-dashed border-primary animate-[spin_10s_linear_infinite] flex items-center justify-center opacity-50">
-                <div className="w-12 h-12 bg-primary rounded-full" />
-             </div>
+        <div className="flex flex-col md:flex-row items-center justify-center gap-8 py-4">
+          {/* Animated Icon */}
+          <div className="hidden md:flex justify-center items-center w-32 h-32">
+            <div className="w-24 h-24 rounded-full border-4 border-dashed border-primary animate-[spin_10s_linear_infinite] flex items-center justify-center opacity-50">
+              <div className="w-12 h-12 bg-primary rounded-full" />
+            </div>
           </div>
 
-          <div className="space-y-4">
+          {/* Instructions */}
+          <div className="space-y-4 flex-1">
             {content.steps.map((step, i) => (
               <div key={i} className="flex items-center gap-3">
                 <div className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center shrink-0">

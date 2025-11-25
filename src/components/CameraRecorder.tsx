@@ -1,271 +1,209 @@
 import { useRef, useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { formatTime } from "@/utils/formatTime";
-import { Play, Pause, Square, RotateCw, CheckCircle } from "lucide-react";
+import { 
+  RotateCw, 
+  CheckCircle, 
+  MonitorSmartphone, 
+  RotateCcw,
+  Loader2,
+  Square
+} from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
-// Custom hook to check screen orientation
 const useScreenOrientation = () => {
   const [isLandscape, setIsLandscape] = useState(window.innerWidth > window.innerHeight);
-
   useEffect(() => {
-    const handleResize = () => {
-      setIsLandscape(window.innerWidth > window.innerHeight);
-    };
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
+    const check = () => setIsLandscape(window.innerWidth > window.innerHeight);
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
   }, []);
-
   return isLandscape;
 };
 
 interface CameraRecorderProps {
+  angleLabel: string;
   onRecordingComplete: (blob: Blob) => void;
-  minDuration?: number; // seconds
 }
 
-export const CameraRecorder = ({ onRecordingComplete, minDuration = 12 }: CameraRecorderProps) => {
+export const CameraRecorder = ({ angleLabel, onRecordingComplete }: CameraRecorderProps) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
 
-  const [status, setStatus] = useState<"idle" | "recording" | "paused" | "stopped">("idle");
+  const [status, setStatus] = useState<"idle" | "recording" | "review">("idle");
   const [elapsed, setElapsed] = useState(0);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null);
+  
+  const [hasZoom, setHasZoom] = useState(false);
+  const [zoomLevel, setZoomLevel] = useState(1);
   const isLandscape = useScreenOrientation();
 
-  // Enforce Landscape Mode
+  // --- 1. START CAMERA AUTOMATICALLY ---
   useEffect(() => {
-    if (screen.orientation && 'lock' in screen.orientation) {
-      (screen.orientation as any).lock("landscape").catch(() => {
-        console.warn("Screen orientation lock failed.");
-      });
-    }
-
-    return () => {
-      // Unlock on component unmount
-      if (screen.orientation && 'unlock' in screen.orientation) {
-        (screen.orientation as any).unlock();
-      }
-    };
-  }, []);
-
-  // Initialize Camera
-  useEffect(() => {
-    const startCamera = async () => {
+    const initCamera = async () => {
       try {
-        // Request camera with preference for back camera and 1080p
         const stream = await navigator.mediaDevices.getUserMedia({
-          video: { 
-            facingMode: "environment", 
-            width: { ideal: 1920 }, 
-            height: { ideal: 1080 } 
-          },
-          audio: false, // Audio is usually not needed for photogrammetry
+          video: { facingMode: "environment", width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 30 } },
+          audio: false,
         });
-        
         streamRef.current = stream;
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-        }
+        if (videoRef.current) videoRef.current.srcObject = stream;
+
+        const track = stream.getVideoTracks()[0];
+        if (track.getCapabilities && 'zoom' in track.getCapabilities()) setHasZoom(true);
       } catch (err) {
-        console.error("Camera Error:", err);
-        toast.error("Could not access camera. Please check permissions.");
+        console.error(err);
+        toast.error("Camera access denied");
       }
     };
-
-    startCamera();
-
-    // Cleanup on unmount
+    initCamera();
+    
     return () => {
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach(t => t.stop());
-      }
+      if (streamRef.current) streamRef.current.getTracks().forEach(t => t.stop());
     };
   }, []);
 
-  // Timer Logic
+  // --- 2. AUTO STOP AT 30s ---
+  useEffect(() => {
+    if (status === "recording" && elapsed >= 30) {
+      handleStop();
+      if (navigator.vibrate) navigator.vibrate(200);
+    }
+  }, [elapsed, status]);
+
+  // --- 3. TIMER ---
   useEffect(() => {
     let interval: NodeJS.Timeout;
     if (status === "recording") {
-      interval = setInterval(() => {
-        setElapsed(prev => prev + 1);
-      }, 1000);
+      interval = setInterval(() => setElapsed(p => p + 1), 1000);
     }
     return () => clearInterval(interval);
   }, [status]);
 
-  const startRecording = () => {
+  const handleStart = () => {
     if (!streamRef.current) return;
-    
     chunksRef.current = [];
     setElapsed(0);
     
-    // Prefer high-efficiency codecs if available
-    const mimeType = MediaRecorder.isTypeSupported("video/webm;codecs=vp9") 
-        ? "video/webm;codecs=vp9" 
-        : "video/webm";
+    const mimeType = MediaRecorder.isTypeSupported("video/mp4") ? "video/mp4" : "video/webm";
+    const recorder = new MediaRecorder(streamRef.current, { mimeType, videoBitsPerSecond: 15000000 });
 
-    try {
-      const mediaRecorder = new MediaRecorder(streamRef.current, { mimeType });
+    recorder.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
+    
+    recorder.onstop = () => {
+      const blob = new Blob(chunksRef.current, { type: mimeType });
+      setRecordedBlob(blob);
+      setPreviewUrl(URL.createObjectURL(blob));
+      setStatus("review");
+    };
 
-      mediaRecorder.ondataavailable = (e) => {
-        if (e.data.size > 0) chunksRef.current.push(e.data);
-      };
-
-      mediaRecorder.onstop = () => {
-        const blob = new Blob(chunksRef.current, { type: "video/webm" });
-        setPreviewUrl(URL.createObjectURL(blob));
-      };
-
-      mediaRecorderRef.current = mediaRecorder;
-      mediaRecorder.start(1000); // Slice data every second
-      setStatus("recording");
-    } catch (e) {
-      console.error(e);
-      toast.error("Failed to start recording. Your device might not support this format.");
-    }
+    mediaRecorderRef.current = recorder;
+    recorder.start(1000);
+    setStatus("recording");
   };
 
-  const pauseRecording = () => {
+  const handleStop = () => {
     if (mediaRecorderRef.current?.state === "recording") {
-      mediaRecorderRef.current.pause();
-      setStatus("paused");
-    }
-  };
-
-  const resumeRecording = () => {
-    if (mediaRecorderRef.current?.state === "paused") {
-      mediaRecorderRef.current.resume();
-      setStatus("recording");
-    }
-  };
-
-  const stopRecording = () => {
-    if (mediaRecorderRef.current) {
       mediaRecorderRef.current.stop();
-      setStatus("stopped");
     }
   };
 
   const handleRetake = () => {
     if (previewUrl) URL.revokeObjectURL(previewUrl);
-    
     setPreviewUrl(null);
+    setRecordedBlob(null);
     setStatus("idle");
     setElapsed(0);
-    chunksRef.current = [];
-    
-    // Re-attach stream to video element if needed
     if (videoRef.current && streamRef.current) {
-        videoRef.current.srcObject = streamRef.current;
-        videoRef.current.play().catch(console.error);
+      videoRef.current.srcObject = streamRef.current;
+      videoRef.current.play().catch(() => {});
     }
   };
 
-  const handleAccept = () => {
-    if (chunksRef.current.length > 0) {
-      const blob = new Blob(chunksRef.current, { type: "video/webm" });
-      onRecordingComplete(blob);
+  const handleConfirm = () => {
+    if (recordedBlob) {
+      onRecordingComplete(recordedBlob);
     }
+  };
+
+  const toggleZoom = async () => {
+    if (!streamRef.current) return;
+    const track = streamRef.current.getVideoTracks()[0];
+    const newZoom = zoomLevel === 1 ? 2 : 1;
+    try {
+      // @ts-ignore
+      await track.applyConstraints({ advanced: [{ zoom: newZoom }] });
+      setZoomLevel(newZoom);
+    } catch (e) {}
   };
 
   return (
-    <div className="relative w-full h-full flex flex-row bg-black">
-      
-      {/* Orientation Enforcer Message */}
+    <div className="fixed inset-0 w-full h-[100dvh] bg-black overflow-hidden flex font-sans" style={{ touchAction: 'none' }}>
       {!isLandscape && (
-        <div className="absolute inset-0 bg-background/90 backdrop-blur-md z-50 flex flex-col items-center justify-center text-foreground">
-          <RotateCw className="w-16 h-16 mb-6 animate-pulse" />
-          <h2 className="text-2xl font-bold mb-2">Please Rotate Your Device</h2>
-          <p className="text-muted-foreground max-w-xs text-center">
-            This experience is designed to be used in landscape mode for the best results.
-          </p>
+        <div className="absolute inset-0 bg-black/90 z-[60] flex items-center justify-center text-white">
+          <RotateCw className="w-12 h-12 mb-4 animate-spin-slow" />
+          <p>Rotate to Landscape</p>
         </div>
       )}
 
-      {/* Video Viewport */}
-      <div className="relative flex-1 overflow-hidden bg-black">
-        {previewUrl ? (
-          <video src={previewUrl} controls playsInline className="w-full h-full object-contain" />
+      {/* VIDEO */}
+      <div className="absolute inset-0 w-full h-full z-0">
+        {status === "review" && previewUrl ? (
+          <video src={previewUrl} autoPlay loop playsInline className="w-full h-full object-contain bg-black" />
         ) : (
-          <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-contain" />
-        )}
-        
-        {/* Overlays (Only show when live camera is active) */}
-        {!previewUrl && (
-          <>
-            {/* Target Overlay */}
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              <div className="w-64 h-64 rounded-full border-2 border-white/20 border-dashed" />
-            </div>
-            
-            {/* Timer HUD */}
-            <div className="absolute top-4 left-1/2 -translate-x-1/2 flex justify-center pointer-events-none">
-              <div className="bg-black/50 backdrop-blur px-4 py-1.5 rounded-full text-white font-mono font-bold flex items-center gap-2 shadow-lg">
-                <div className={cn("w-3 h-3 rounded-full transition-colors", status === "recording" ? "bg-red-500 animate-pulse" : "bg-zinc-500")} />
-                {formatTime(elapsed)}
-              </div>
-            </div>
-
-            {/* Min Duration Warning */}
-            {elapsed > 0 && elapsed < minDuration && status !== "idle" && (
-               <div className="absolute bottom-4 left-1/2 -translate-x-1/2 text-center pointer-events-none animate-in fade-in">
-                 <span className="text-white text-sm font-semibold px-3 py-1 bg-red-500/80 backdrop-blur-sm rounded-full shadow-sm">
-                   Keep recording... ({minDuration - elapsed}s left)
-                 </span>
-               </div>
-            )}
-          </>
+          <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover scale-105" />
         )}
       </div>
 
-      {/* Controls Bar (Vertical on the right) */}
-      <div className="w-32 bg-background/90 backdrop-blur-xl flex flex-col items-center justify-center p-4 border-l border-border">
-        {status === "idle" && (
-          <Button
-            onClick={startRecording}
-            size="icon"
-            className="w-20 h-20 rounded-full bg-red-600 hover:bg-red-700 border-4 border-background ring-2 ring-red-600/50 transition-all hover:scale-105 active:scale-95 shadow-lg"
-          >
-            <div className="w-8 h-8 bg-white rounded-sm shadow-sm" />
-          </Button>
-        )}
+      {/* HUD */}
+      <div className="absolute top-0 left-0 right-24 h-24 z-20 pointer-events-none flex flex-col items-center pt-6 bg-gradient-to-b from-black/60 to-transparent">
+        <h2 className="text-white/90 font-bold uppercase tracking-widest text-sm drop-shadow-md mb-1">{angleLabel}</h2>
+        <div className={cn("text-4xl font-mono font-black drop-shadow-xl", status === "recording" ? "text-red-500" : "text-white")}>
+          {formatTime(elapsed)}
+        </div>
+      </div>
 
-        {(status === "recording" || status === "paused") && (
-          <div className="flex flex-col items-center gap-6 animate-in fade-in zoom-in-95 duration-200">
-             <Button
-              onClick={stopRecording}
-              size="icon"
-              className="w-20 h-20 rounded-full bg-red-600 hover:bg-red-700 transition-all hover:scale-105 active:scale-95 shadow-lg"
-            >
-              <Square className="w-8 h-8 fill-current text-white" />
+      {/* CONTROLS */}
+      <div className="absolute top-0 bottom-0 right-0 w-28 z-30 flex flex-col items-center justify-center bg-black/30 backdrop-blur-md border-l border-white/10">
+        {status === "review" ? (
+          <div className="flex flex-col gap-6 animate-in fade-in slide-in-from-right">
+            <Button onClick={handleConfirm} className="w-16 h-16 rounded-full bg-green-500 hover:bg-green-600 text-white shadow-lg border-4 border-white/10 p-0 flex items-center justify-center">
+              <CheckCircle className="w-8 h-8" />
             </Button>
+            <span className="text-xs font-bold text-white/80 uppercase">Next</span>
+            
+            <div className="h-4" />
 
-            {status === "recording" ? (
-              <Button onClick={pauseRecording} variant="secondary" size="icon" className="w-14 h-14 rounded-full shadow-md">
-                <Pause className="w-6 h-6" />
-              </Button>
-            ) : (
-              <Button onClick={resumeRecording} variant="secondary" size="icon" className="w-14 h-14 rounded-full shadow-md">
-                <Play className="w-6 h-6 ml-1" />
+            <Button onClick={handleRetake} variant="outline" className="w-14 h-14 rounded-full border-2 border-white/30 bg-black/40 text-white p-0 flex items-center justify-center">
+              <RotateCcw className="w-6 h-6" />
+            </Button>
+            <span className="text-xs font-bold text-white/50 uppercase">Retake</span>
+          </div>
+        ) : (
+          <div className="flex flex-col items-center gap-8">
+            {hasZoom && (
+              <Button variant="ghost" onClick={toggleZoom} className="w-12 h-12 rounded-full border border-white/20 text-white font-bold text-xs">
+                {zoomLevel}x
               </Button>
             )}
-          </div>
-        )}
-
-        {status === "stopped" && previewUrl && (
-          <div className="flex flex-col items-center gap-4 w-full animate-in fade-in">
-            <Button onClick={handleAccept} className="w-full py-4 text-base font-semibold">
-              <CheckCircle className="mr-2 w-4 h-4" />
-              Use Video
-            </Button>
-            <Button onClick={handleRetake} variant="outline" className="w-full py-4 text-base">
-              <RotateCw className="mr-2 w-4 h-4" />
-              Retake
-            </Button>
+            <button 
+              onClick={status === "idle" ? handleStart : handleStop}
+              className="group relative w-20 h-20 flex items-center justify-center transition-transform active:scale-95"
+            >
+              <div className="absolute inset-0 rounded-full border-[5px] border-white opacity-100 shadow-lg" />
+              {status === "recording" ? (
+                <div className="w-8 h-8 bg-red-500 rounded-sm shadow-inner" />
+              ) : (
+                <div className="w-16 h-16 bg-red-500 rounded-full shadow-inner" />
+              )}
+            </button>
+            <span className="text-[10px] font-bold text-white/60 uppercase tracking-widest rotate-90 mt-2">
+              {status === "idle" ? "START" : "STOP"}
+            </span>
           </div>
         )}
       </div>

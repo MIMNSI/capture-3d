@@ -1,179 +1,144 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { AlertTriangle, Loader2, ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
+import { Loader2, ArrowLeft, AlertTriangle } from "lucide-react";
 
-// Import custom components
-import { CameraRecorder } from "../CameraRecorder";
-import { AngleHeader } from "../AngleHeader";
-import { TutorialModal } from "../TutorialModal";
-import { SavePreview } from "../SavePreview"; // Final preview screen
-
-// Import utilities
+import { CameraRecorder } from "@/components/CameraRecorder";
+import { TutorialModal } from "@/components/TutorialModal";
+import { SavePreview } from "@/components/SavePreview"; 
 import { performAutoCheck } from "@/utils/autoCheck";
 import { concatVideos } from "@/utils/videoConcat";
 
-// Import UI components
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 
 interface CameraCaptureProps {
-  onBack?: () => void; // Optional prop if used as a standalone component
+  onBack?: () => void;
 }
 
 const CameraCapture = ({ onBack }: CameraCaptureProps) => {
   const navigate = useNavigate();
   
-  // State Management
-  const [angleStep, setAngleStep] = useState<1 | 2 | 3>(1); // 1=Middle, 2=Top, 3=Bottom
-  const [blobs, setBlobs] = useState<Blob[]>([]);
-  const [showTutorial, setShowTutorial] = useState(true); // Show tutorial for the first angle immediately
-  const [isChecking, setIsChecking] = useState(false);
-  const [checkError, setCheckError] = useState<string[] | null>(null);
+  // --- Flow State ---
+  const [angleStep, setAngleStep] = useState<1 | 2 | 3>(1); // Tracks which angle we are on
+  const [recordedBlobs, setRecordedBlobs] = useState<Blob[]>([]);
+  const [showTutorial, setShowTutorial] = useState(true); 
+  
+  const [isProcessing, setIsProcessing] = useState(false);
   const [finalBlob, setFinalBlob] = useState<Blob | null>(null);
+  const [checkError, setCheckError] = useState<string[] | null>(null);
 
-  // Handler: Called when CameraRecorder finishes a valid take
-  const handleRecordingComplete = async (blob: Blob) => {
-    setIsChecking(true);
-    
-    // 1. Run Auto Check (Quality Control)
-    const checkResult = await performAutoCheck(blob);
-    
-    setIsChecking(false);
+  const getAngleLabel = () => {
+    if (angleStep === 1) return "Middle Angle (1/3)";
+    if (angleStep === 2) return "Top Angle (2/3)";
+    return "Bottom Angle (3/3)";
+  };
 
-    if (!checkResult.ok) {
-      setCheckError(checkResult.errors);
-      return; // Stop here, show error modal
+  // --- STEP COMPLETE LOGIC ---
+  const handleAngleComplete = async (blob: Blob) => {
+    setIsProcessing(true);
+    
+    // 1. Quality Check
+    const check = await performAutoCheck(blob, 3); // Min 3s
+    setIsProcessing(false);
+
+    if (!check.ok) {
+      setCheckError(check.errors);
+      return; // Stay on current step
     }
 
-    if (checkResult.warnings.length > 0) {
-      checkResult.warnings.forEach(w => toast.warning(w));
-    }
+    // 2. Save Blob
+    const newBlobs = [...recordedBlobs, blob];
+    setRecordedBlobs(newBlobs);
 
-    // 2. Store Blob
-    const newBlobs = [...blobs, blob];
-    setBlobs(newBlobs);
-
-    // 3. Decide next step
-    if (angleStep < 3) {
-      // Move to next angle
-      setAngleStep(prev => (prev + 1) as 1 | 2 | 3);
-      setShowTutorial(true); // Trigger tutorial for the NEW angle
+    // 3. Advance Flow
+    if (angleStep === 1) {
+      setAngleStep(2); // Go to Top
+      setShowTutorial(true); 
+    } else if (angleStep === 2) {
+      setAngleStep(3); // Go to Bottom
+      setShowTutorial(true);
     } else {
-      // Finished all 3 angles -> Start Merge
-      processFinalVideo(newBlobs);
+      // Finish
+      finishRecording(newBlobs);
     }
   };
 
-  // Logic: Merge all segments into one continuous video
-  const processFinalVideo = async (allBlobs: Blob[]) => {
+  const finishRecording = async (allBlobs: Blob[]) => {
+    setIsProcessing(true);
     try {
-      toast.info("Processing final video...");
-      const concatenated = await concatVideos(allBlobs);
-      setFinalBlob(concatenated);
-      toast.success("3D Scan ready for preview!");
+      const merged = await concatVideos(allBlobs);
+      setFinalBlob(merged);
+      toast.success("All angles captured!");
     } catch (e) {
-      toast.error("Failed to process video.");
-      console.error("Merge error:", e);
+      toast.error("Error merging videos");
+    } finally {
+      setIsProcessing(false);
     }
-  };
-
-  const handleTutorialStart = () => {
-    setShowTutorial(false);
-  };
-
-  const handleRetryAngle = () => {
-    setCheckError(null);
-    // Closing the error modal allows the user to interact with CameraRecorder again.
-    // The CameraRecorder component manages its own internal "retake" state.
   };
 
   const handleBack = () => {
-    if (onBack) {
-      onBack();
-    } else {
-      navigate("/");
-    }
+    if (onBack) onBack();
+    else navigate("/");
   };
 
-  // If processing is done, show the Final Preview Page
-  // This replaces the current view entirely
   if (finalBlob) {
     return <SavePreview videoBlob={finalBlob} onBack={() => navigate("/")} />;
   }
 
   return (
-    <div className="flex flex-col h-screen bg-background relative">
+    <div className="fixed inset-0 bg-black overflow-hidden">
       
-      {/* Back Button (Absolute positioning to float over UI) */}
-      <div className="absolute top-4 left-4 z-20">
-        <Button 
-          variant="ghost" 
-          size="icon" 
-          onClick={handleBack}
-          className="bg-black/20 hover:bg-black/40 text-white rounded-full backdrop-blur-sm"
-        >
-          <ArrowLeft className="w-6 h-6" />
-        </Button>
-      </div>
+      {/* Back Button */}
+      {!showTutorial && (
+        <div className="absolute top-4 left-4 z-50">
+          <Button variant="ghost" size="icon" onClick={handleBack} className="text-white bg-black/20 backdrop-blur-md hover:bg-black/40 rounded-full">
+            <ArrowLeft className="w-6 h-6" />
+          </Button>
+        </div>
+      )}
 
-      {/* 1. Error Modal (Auto-Check Failed) */}
-      <Dialog open={!!checkError} onOpenChange={() => {}}>
-        <DialogContent className="sm:max-w-md bg-card border-destructive/50">
+      {/* Error Modal */}
+      <Dialog open={!!checkError} onOpenChange={() => setCheckError(null)}>
+        <DialogContent>
           <DialogHeader>
-            <DialogTitle className="flex items-center text-destructive gap-2">
-              <AlertTriangle className="h-5 w-5" /> Recording Issue
-            </DialogTitle>
-            <DialogDescription className="text-foreground/80">
-              We detected some issues with your recording. Please retake this angle.
-              <ul className="list-disc pl-5 mt-2 text-sm text-muted-foreground space-y-1">
-                {checkError?.map((err, i) => <li key={i}>{err}</li>)}
-              </ul>
+            <DialogTitle className="text-red-500">Recording Issue</DialogTitle>
+            <DialogDescription>
+               <ul>{checkError?.map((e, i) => <li key={i}>- {e}</li>)}</ul>
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button onClick={handleRetryAngle} variant="default" className="w-full sm:w-auto">
-              Retake Angle
-            </Button>
+            <Button onClick={() => setCheckError(null)}>Retake</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* 2. Tutorial Modal (Instructions specific to current angle) */}
+      {/* Tutorial Modal */}
       <TutorialModal 
         isOpen={showTutorial} 
         angle={angleStep === 1 ? "middle" : angleStep === 2 ? "top" : "bottom"} 
-        onStart={handleTutorialStart} 
+        onStart={() => setShowTutorial(false)} 
       />
 
-      {/* 3. Checking Overlay (Loading state during checks/merging) */}
-      {isChecking && (
-        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center backdrop-blur-sm">
-          <div className="text-white flex flex-col items-center animate-in zoom-in-95 duration-300">
-            <div className="relative">
-              <div className="absolute inset-0 rounded-full blur-md bg-neon/50 animate-pulse" />
-              <Loader2 className="w-12 h-12 animate-spin relative z-10 text-neon" />
-            </div>
-            <p className="mt-6 text-lg font-medium text-white/90">Analyzing recording quality...</p>
+      {/* Processing Screen */}
+      {isProcessing && (
+        <div className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center">
+          <div className="text-center text-white">
+            <Loader2 className="w-12 h-12 animate-spin mx-auto mb-4 text-primary" />
+            <p className="text-lg font-medium">Processing...</p>
           </div>
         </div>
       )}
 
-      {/* 4. Main UI Components */}
-      <AngleHeader currentAngle={angleStep} />
-      
-      <div className="flex-1 relative">
-        {/* KEY PROP IS CRITICAL: 
-          Changing the key ({angleStep}) forces React to unmount the old CameraRecorder 
-          and mount a fresh one. This ensures the timer resets, the preview clears, 
-          and the internal state is clean for the new angle.
-        */}
+      {/* Main Recorder */}
+      {/* KEY PROP ensures fresh camera every time angle changes */}
+      {!showTutorial && !isProcessing && (
         <CameraRecorder 
-          key={angleStep} 
-          onRecordingComplete={handleRecordingComplete}
-          minDuration={12}
+          key={angleStep}
+          angleLabel={getAngleLabel()}
+          onRecordingComplete={handleAngleComplete}
         />
-      </div>
+      )}
     </div>
   );
 };
