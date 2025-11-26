@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { Progress } from "@/components/ui/progress";
 
 const useScreenOrientation = () => {
   const [isLandscape, setIsLandscape] = useState(window.innerWidth > window.innerHeight);
@@ -176,10 +177,18 @@ export const CameraRecorder = ({ angleLabel, onRecordingComplete }: CameraRecord
               {formatTime(elapsed)}
             </p>
             {status === "recording" && (
-              <div className="flex items-center justify-center gap-2 mt-2">
-                <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-                <span className="text-[9px] text-red-400 uppercase tracking-wider font-bold">Recording</span>
-              </div>
+              <>
+                <div className="flex items-center justify-center gap-2 mt-2">
+                  <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                  <span className="text-[9px] text-red-400 uppercase tracking-wider font-bold">Recording</span>
+                </div>
+                <div className="mt-3 w-full">
+                  <Progress 
+                    value={(elapsed / 30) * 100} 
+                    className="h-1.5 bg-white/10"
+                  />
+                </div>
+              </>
             )}
           </div>
         </div>
