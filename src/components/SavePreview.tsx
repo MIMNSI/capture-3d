@@ -1,7 +1,7 @@
 import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
-import { Slider } from "@/components/ui/slider";
-import { Download, Upload, Scissors, ArrowLeft } from "lucide-react";
+
+import { Download, Upload, ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
 
 interface SavePreviewProps {
@@ -55,20 +55,6 @@ export const SavePreview = ({ videoBlob, onBack }: SavePreviewProps) => {
 
       {/* Action Area */}
       <div className="bg-card border-t border-border p-6 space-y-6 shadow-lg-up">
-        {/* Trim Control (Visual Only for Phase 2) */}
-        <div className="space-y-3">
-          <div className="flex items-center justify-between text-sm font-medium text-muted-foreground">
-            <span className="flex items-center gap-2">
-              <Scissors className="w-4 h-4"/> Trim Video
-            </span>
-            <span>Full Duration</span>
-          </div>
-          <Slider defaultValue={[0, 100]} max={100} step={1} className="w-full" disabled />
-          <p className="text-xs text-muted-foreground text-center">
-            Trimming is disabled for merged videos in this version.
-          </p>
-        </div>
-
         {/* Actions */}
         <div className="grid grid-cols-2 gap-4">
           <Button variant="outline" onClick={handleDownload} className="w-full py-6 text-base">

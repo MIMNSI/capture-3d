@@ -30,17 +30,21 @@ export const concatVideos = async (blobs: Blob[]): Promise<Blob> => {
     i++;
   }
 
+  // Convert and merge to high-quality MP4
   await ffmpeg.exec([
     "-i",
     `concat:${inputPaths.join("|")}`,
-    "-c",
-    "copy",
-    "output.webm",
+    "-c:v",
+    "libx264",
+    "-preset",
+    "medium",
+    "-crf",
+    "18",
+    "-pix_fmt",
+    "yuv420p",
+    "output.mp4",
   ]);
 
-  const data = await ffmpeg.readFile("output.webm");
-  // The Uint8Array returned by readFile may be a view on a SharedArrayBuffer,
-  // which can cause issues with the Blob constructor. Creating a new Uint8Array
-  // creates a copy with a regular ArrayBuffer, ensuring compatibility.
-  return new Blob([new Uint8Array(data as Uint8Array)], { type: "video/webm" });
+  const data = await ffmpeg.readFile("output.mp4");
+  return new Blob([new Uint8Array(data as Uint8Array)], { type: "video/mp4" });
 };
