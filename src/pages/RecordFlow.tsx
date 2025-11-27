@@ -6,6 +6,7 @@ import { SavePreview } from "../components/SavePreview";
 import { SuccessCelebration } from "../components/capture/SuccessCelebration";
 import { AngleReviewScreen } from "../components/capture/AngleReviewScreen";
 import { performAutoCheck } from "../utils/autoCheck";
+import { concatVideos } from "../utils/videoConcat";
 
 import {
   Dialog,
@@ -262,10 +263,3 @@ const RecordFlow = () => {
 
 export default RecordFlow;
 
-async function concatVideos(allBlobs: Blob[]): Promise<Blob> {
-  if (!allBlobs || allBlobs.length === 0)
-    throw new Error("No blobs to concatenate");
-
-  const mime = allBlobs[0].type || "video/mp4";
-  return new Blob(allBlobs, { type: mime });
-}
