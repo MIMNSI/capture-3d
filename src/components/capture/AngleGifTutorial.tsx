@@ -6,6 +6,11 @@ import {
   ChevronLeft,
 } from "lucide-react";
 
+// Make sure these paths are correct for your project structure
+import middleVideo from "../../asset/middle.mov";
+import topVideo from "../../asset/top.mov";
+import bottomVideo from "../../asset/bottom.mov";
+
 interface AngleGifTutorialProps {
   angle: (typeof angleOrder)[number];
   onNext: () => void;
@@ -18,21 +23,21 @@ const angleData = {
   middle: {
     title: "Middle Angle",
     subtitle: "Camera at Chest Level",
-    video: "/assets/tutorials/middle.mp4",
+    video: middleVideo,
     speak: "This is the middle angle. Hold your phone at chest height and move around the object slowly.",
     lines: ["Hold chest height", "Move in full circle", "Keep object centered"],
   },
   top: {
     title: "Top Angle",
     subtitle: "Camera Above Object",
-    video: "/assets/tutorials/top.mp4",
+    video: topVideo,
     speak: "This is the top angle. Hold your phone above the object at a downward angle and move in a full circle.",
     lines: ["Raise phone above object", "Tilt 45° down", "Walk full circle"],
   },
   bottom: {
     title: "Bottom Angle",
     subtitle: "Camera Below Object",
-    video: "/assets/tutorials/bottom.mp4",
+    video: bottomVideo,
     speak: "This is the bottom angle. Hold your phone low and tilt upward while moving around the object.",
     lines: ["Phone lower than object", "Tilt 45° up", "Walk full circle"],
   },
@@ -82,7 +87,7 @@ const AngleGifTutorial: FC<AngleGifTutorialProps> = ({ angle, onNext, onPrev }) 
     };
 
     msg.onerror = () => {
-       // On error, we rely on the timer to eventually unlock the button
+        // On error, we rely on the timer to eventually unlock the button
     };
 
     window.speechSynthesis.speak(msg);
@@ -129,10 +134,14 @@ const AngleGifTutorial: FC<AngleGifTutorialProps> = ({ angle, onNext, onPrev }) 
 
       {/* LEFT SIDE: PREVIEW */}
       <div className="w-[60%] flex justify-center items-center px-4 bg-[#050505]">
-        <div className="relative w-full max-w-lg rounded-2xl bg-gradient-to-br from-[#111] to-[#0A0A0A] border border-[#222] p-4 shadow-2xl">
-          <div className="absolute top-4 left-4 px-3 py-1 rounded-full border border-[#333] text-[10px] tracking-wider text-white/80 z-10 bg-black/40 backdrop-blur-md">
-            TUTORIAL PREVIEW
-          </div>
+        {/* Updated Container: 
+          - Removed p-4 padding so video fits edge-to-edge.
+          - Added overflow-hidden so video corners are rounded by the container.
+          - Increased max-w for better presence.
+        */}
+        <div className="relative w-full max-w-2xl rounded-2xl bg-gradient-to-br from-[#111] to-[#0A0A0A] border border-[#222] shadow-2xl overflow-hidden">
+          
+          {/* TUTORIAL PREVIEW TEXT REMOVED HERE */}
 
           <video
             ref={videoRef}
@@ -143,9 +152,10 @@ const AngleGifTutorial: FC<AngleGifTutorialProps> = ({ angle, onNext, onPrev }) 
             playsInline
             src={data.video}
             onLoadedData={() => setVideoLoaded(true)}
+            // Updated classes: Removed fixed heights and mt-4. Added h-auto.
             className={`
-              w-full h-[200px] sm:h-[220px] md:h-[240px] lg:h-[280px]
-              object-contain mt-4 transition-opacity duration-500
+              w-full h-auto
+              object-contain transition-opacity duration-500
               ${videoLoaded ? 'opacity-100' : 'opacity-0'} 
             `}
           />
