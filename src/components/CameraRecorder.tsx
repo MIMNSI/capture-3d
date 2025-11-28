@@ -6,7 +6,8 @@ import { cn } from "@/lib/utils";
 import { CountdownOverlay } from "./capture/CountdownOverlay";
 
 // --- Configuration ---
-const ANGLE_DURATION = 40;
+const ANGLE_DURATION = 15;
+const TOTAL_DURATION = ANGLE_DURATION * 3;
 
 const PHASES = [
   { id: 1, label: "Middle", instruction: "Hold phone at chest height. Walk around object." },
@@ -26,12 +27,9 @@ const useScreenOrientation = () => {
 
 interface CameraRecorderProps {
   onRecordingComplete: (blob: Blob) => void;
-  angleStep: number;
-  autoStart?: boolean;
 }
 
-export const CameraRecorder = ({ onRecordingComplete, angleStep, autoStart = false }: CameraRecorderProps) => {
-  const currentPhase = PHASES[angleStep - 1];
+export const CameraRecorder = ({ onRecordingComplete }: CameraRecorderProps) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -40,6 +38,7 @@ export const CameraRecorder = ({ onRecordingComplete, angleStep, autoStart = fal
   // Flow State
   const [status, setStatus] = useState<"countdown" | "recording" | "paused" | "finished">("countdown");
   const [elapsed, setElapsed] = useState(0);
+  const [currentPhaseIdx, setCurrentPhaseIdx] = useState(0);
   const [flash, setFlash] = useState(false);
   
   // Zoom State
@@ -85,7 +84,7 @@ export const CameraRecorder = ({ onRecordingComplete, angleStep, autoStart = fal
 
           if ('zoom' in capabilities) {
             setHasZoom(true);
-            const min = (capabilities.zoom as { min: number }).min;
+            const min = capabilities.zoom.min;
             setMinZoom(min);
 
             const initialZoom = min < 1 ? min : 1;
@@ -137,7 +136,7 @@ export const CameraRecorder = ({ onRecordingComplete, angleStep, autoStart = fal
     recorder.start(1000); 
     setStatus("recording");
     
-    speak(`Recording started. ${currentPhase.instruction}`);
+    speak("Recording started. Hold at chest level and circle the object.");
   };
 
   const togglePause = () => {
@@ -185,7 +184,19 @@ export const CameraRecorder = ({ onRecordingComplete, angleStep, autoStart = fal
       setElapsed((prev) => {
         const nextTime = prev + 1;
 
-        if (nextTime >= ANGLE_DURATION) {
+        if (nextTime === ANGLE_DURATION) {
+          setCurrentPhaseIdx(1); 
+          triggerFlash();
+          if (navigator.vibrate) navigator.vibrate(200);
+          speak("Switch to Top Angle. Raise phone high and tilt down.");
+        } 
+        else if (nextTime === ANGLE_DURATION * 2) {
+          setCurrentPhaseIdx(2);
+          triggerFlash();
+          if (navigator.vibrate) navigator.vibrate(200);
+          speak("Switch to Bottom Angle. Lower phone and tilt up.");
+        }
+        else if (nextTime >= TOTAL_DURATION) {
           clearInterval(interval);
           finishRecording();
           return nextTime;
@@ -196,7 +207,7 @@ export const CameraRecorder = ({ onRecordingComplete, angleStep, autoStart = fal
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [status]);
+  }, [status, speak]);
 
   const finishRecording = () => {
     if (mediaRecorderRef.current?.state !== "inactive") {
@@ -207,11 +218,13 @@ export const CameraRecorder = ({ onRecordingComplete, angleStep, autoStart = fal
     speak("Recording complete.");
   };
 
+  const currentPhase = PHASES[currentPhaseIdx];
+
   return (
     <div className="fixed inset-0 w-full h-[100dvh] bg-black overflow-hidden select-none" style={{ touchAction: 'none' }}>
       
       {/* 1. Countdown Overlay */}
-      {status === "countdown" && !autoStart && (
+      {status === "countdown" && (
         <CountdownOverlay onComplete={startRecording} />
       )}
 
@@ -308,10 +321,41 @@ export const CameraRecorder = ({ onRecordingComplete, angleStep, autoStart = fal
                       status === "paused" ? "bg-yellow-500" : "bg-primary"
                     )}
                     style={{ 
-                      width: `${(elapsed / ANGLE_DURATION) * 100}%`,
+                      width: `${(elapsed / TOTAL_DURATION) * 100}%`,
                       transitionDuration: '1s'
                     }}
                   />
+                </div>
+
+                {/* Angle Indicators (Centered below Timer) */}
+                <div className="flex items-center gap-6 mt-1">
+                  {PHASES.map((phase, index) => {
+                    const isActive = index === currentPhaseIdx;
+                    const isCompleted = index < currentPhaseIdx;
+
+                    return (
+                      <div key={phase.id} className="flex flex-col items-center gap-1.5">
+                        <div className={cn(
+                          "w-8 h-8 rounded-full flex items-center justify-center border-2 transition-all duration-300",
+                          isCompleted ? "bg-green-500 border-green-500" :
+                          isActive ? "bg-white text-black border-white scale-110 shadow-[0_0_10px_rgba(255,255,255,0.5)]" :
+                          "bg-black/40 border-white/30 text-white/50"
+                        )}>
+                          {isCompleted ? (
+                            <CheckCircle2 className="w-5 h-5 text-white" />
+                          ) : (
+                            <span className="text-xs font-bold">{index + 1}</span>
+                          )}
+                        </div>
+                        <span className={cn(
+                          "text-[10px] uppercase font-bold tracking-wider transition-colors",
+                          isActive ? "text-white" : "text-white/40"
+                        )}>
+                          {phase.label}
+                        </span>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
 

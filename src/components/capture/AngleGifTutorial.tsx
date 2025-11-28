@@ -48,7 +48,10 @@ const AngleGifTutorial: FC<AngleGifTutorialProps> = ({ angle, onNext, onPrev }) 
   const data = angleData[angle];
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  
+  // Refs for audio management
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+  const voiceRetryRef = useRef<NodeJS.Timeout | null>(null);
 
   const [isMuted, setIsMuted] = useState(false);
   const isMutedRef = useRef(false);
@@ -56,65 +59,79 @@ const AngleGifTutorial: FC<AngleGifTutorialProps> = ({ angle, onNext, onPrev }) 
   const [state, setState] = useState<"idle" | "speaking" | "finished">("idle");
   const [videoLoaded, setVideoLoaded] = useState(false);
   
-  // New state to show countdown (optional, but helpful for 15s wait)
-  const [timeLeft, setTimeLeft] = useState(15);
+  // FIX 1: Timer changed to 10 seconds
+  const [timeLeft, setTimeLeft] = useState(10);
 
+  // Sync mute state ref
   useEffect(() => {
     isMutedRef.current = isMuted;
   }, [isMuted]);
 
-  // --- Voice Logic ---
+  // --- Robust Voice Logic ---
   const speakInstructions = useCallback(() => {
     if (!("speechSynthesis" in window)) return; 
 
+    // 1. Clear any existing speech or retries
     window.speechSynthesis.cancel();
+    if (voiceRetryRef.current) clearTimeout(voiceRetryRef.current);
 
     if (isMutedRef.current) return;
 
-    const msg = new SpeechSynthesisUtterance(data.speak);
-    msg.rate = 1.0;
-    utteranceRef.current = msg;
-    
-    msg.onstart = () => setState("speaking");
-    
-    // NOTE: We removed the onend logic here. 
-    // The button will ONLY appear after the 15s timer, not when the voice finishes.
-    msg.onend = () => {
-      // Do nothing, wait for timer.
+    // 2. Define the speak function
+    const trySpeaking = (attempt = 0) => {
+      const voices = window.speechSynthesis.getVoices();
+
+      // FIX 2: If voices aren't loaded yet (common on first load), retry every 100ms
+      if (voices.length === 0 && attempt < 20) {
+        voiceRetryRef.current = setTimeout(() => trySpeaking(attempt + 1), 100);
+        return;
+      }
+
+      // 3. Create Utterance (only after voices might be ready)
+      const msg = new SpeechSynthesisUtterance(data.speak);
+      msg.rate = 1.0;
+      msg.volume = 1.0;
+      
+      // Optional: Try to pick a decent English voice if available
+      const preferredVoice = voices.find(v => v.lang.includes('en') && !v.name.includes('Google')) || voices[0];
+      if (preferredVoice) msg.voice = preferredVoice;
+
+      utteranceRef.current = msg;
+      
+      msg.onstart = () => setState("speaking");
+      // Note: We don't unlock on end, we wait for the 10s timer
+      msg.onend = () => {}; 
+      msg.onerror = (e) => console.warn("Speech error:", e);
+
+      window.speechSynthesis.speak(msg);
     };
 
-    msg.onerror = (e) => {
-      console.warn("Speech error:", e);
-    };
+    trySpeaking();
 
-    const voices = window.speechSynthesis.getVoices();
-    if (voices.length > 0) {
-        window.speechSynthesis.speak(msg);
-    } else {
-        window.speechSynthesis.onvoiceschanged = () => {
-            window.speechSynthesis.speak(msg);
-            window.speechSynthesis.onvoiceschanged = null;
-        };
-    }
   }, [data.speak]);
 
   // --- Effect: Step Change Lifecycle ---
   useEffect(() => {
     setVideoLoaded(false);
     setState("speaking");
-    setTimeLeft(15); // Reset countdown
+    setTimeLeft(10); // Reset countdown to 10s
     
+    // Reload video
     if (videoRef.current) {
       videoRef.current.load();
     }
 
-    // Small delay to ensure audio plays correctly
+    // Force browser to acknowledge audio context
+    if ("speechSynthesis" in window) {
+        window.speechSynthesis.resume(); 
+    }
+
+    // Small delay to ensure component render before speaking
     const audioTimer = setTimeout(() => {
         speakInstructions();
-    }, 500);
+    }, 300);
 
-    // --- 15 SECOND TIMER LOGIC ---
-    // We use an interval to update the countdown visual
+    // --- 10 SECOND TIMER LOGIC ---
     const interval = setInterval(() => {
       setTimeLeft((prev) => {
         if (prev <= 1) {
@@ -128,6 +145,7 @@ const AngleGifTutorial: FC<AngleGifTutorialProps> = ({ angle, onNext, onPrev }) 
 
     return () => {
       clearTimeout(audioTimer);
+      if (voiceRetryRef.current) clearTimeout(voiceRetryRef.current);
       clearInterval(interval);
       window.speechSynthesis.cancel();
     };
@@ -136,8 +154,13 @@ const AngleGifTutorial: FC<AngleGifTutorialProps> = ({ angle, onNext, onPrev }) 
   const toggleMute = () => {
     const newMuteState = !isMuted;
     setIsMuted(newMuteState);
+    
     if (newMuteState) {
       window.speechSynthesis.cancel();
+      if (voiceRetryRef.current) clearTimeout(voiceRetryRef.current);
+    } else {
+        // If unmuting, try to speak immediately
+        speakInstructions();
     }
   };
 
@@ -218,17 +241,15 @@ const AngleGifTutorial: FC<AngleGifTutorialProps> = ({ angle, onNext, onPrev }) 
             {state !== "finished" ? (
                 // LOADING/WAITING STATE
                 <div className="w-full h-12 bg-[#161616] border border-[#222] rounded-lg flex items-center justify-center gap-2 text-[#888]">
-                    {/* Show Pulse if speaking, otherwise static */}
                     <div className="animate-pulse flex items-center gap-2">
                       <Volume2 size={16} className="text-[#2DFFA7]" />
                       <span className="text-xs font-medium tabular-nums">
-                        {/* Display countdown text */}
                         Wait {timeLeft}s...
                       </span>
                     </div>
                 </div>
             ) : (
-                // FINISHED STATE
+                // FINISHED STATE - NEXT BUTTON
                 <button
                     onClick={onNext}
                     className="w-full h-12 bg-[#2DFFA7] text-black font-bold rounded-lg flex items-center justify-center gap-2 hover:bg-[#28e596] active:scale-[0.98] transition-all shadow-[0_0_15px_rgba(45,255,167,0.1)] text-sm"
