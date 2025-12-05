@@ -12,24 +12,28 @@ import { concatVideos } from "@/utils/videoConcat";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 
-const CameraCapture = ({ onBack }) => {
+interface CameraCaptureProps {
+  onBack?: () => void;
+}
+
+const CameraCapture = ({ onBack }: CameraCaptureProps) => {
   const navigate = useNavigate();
   
   const [angleStep, setAngleStep] = useState(1);
-  const [blobs, setBlobs] = useState([]);
+  const [blobs, setBlobs] = useState<Blob[]>([]);
   const [showTutorial, setShowTutorial] = useState(true);
   const [autoStart, setAutoStart] = useState(false);
 
   const [isProcessing, setIsProcessing] = useState(false);
-  const [finalBlob, setFinalBlob] = useState(null);
-  const [checkError, setCheckError] = useState(null);
+  const [finalBlob, setFinalBlob] = useState<Blob | null>(null);
+  const [checkError, setCheckError] = useState<string[] | null>(null);
 
   const getLabel = () =>
     angleStep === 1 ? "Middle Angle" :
     angleStep === 2 ? "Top Angle" : "Bottom Angle";
 
   // HANDLE RECORDING COMPLETE
-  const handleComplete = async (blob) => {
+  const handleComplete = async (blob: Blob) => {
     setIsProcessing(true);
 
     const check = await performAutoCheck(blob, 3);
@@ -52,7 +56,7 @@ const CameraCapture = ({ onBack }) => {
     }
   };
 
-  const mergeVideos = async (videos) => {
+  const mergeVideos = async (videos: Blob[]) => {
     setIsProcessing(true);
     try {
       const merged = await concatVideos(videos);
