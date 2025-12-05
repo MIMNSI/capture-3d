@@ -178,6 +178,15 @@ export const CameraRecorder = ({ onRecordingComplete }: CameraRecorderProps) => 
     setTimeout(() => setFlash(false), 300);
   };
 
+  const finishRecording = useCallback(() => {
+    if (mediaRecorderRef.current?.state !== "inactive") {
+      mediaRecorderRef.current?.stop();
+    }
+    setStatus("finished");
+    if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+    speak("Recording complete.");
+  }, [speak]);
+
   // --- Timer Loop ---
   useEffect(() => {
     if (status !== "recording") return;
@@ -215,16 +224,7 @@ export const CameraRecorder = ({ onRecordingComplete }: CameraRecorderProps) => 
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [status, speak]);
-
-  const finishRecording = () => {
-    if (mediaRecorderRef.current?.state !== "inactive") {
-      mediaRecorderRef.current?.stop();
-    }
-    setStatus("finished");
-    if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
-    speak("Recording complete.");
-  };
+  }, [status, speak, finishRecording]);
 
   const currentPhase = PHASES[currentPhaseIdx];
 
