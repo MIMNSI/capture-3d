@@ -10,6 +10,7 @@ import {
 import middleVideo from "../../asset/middle.webm";
 import topVideo from "../../asset/top.webm";
 import bottomVideo from "../../asset/bottom.webm";
+import detailcapture from "../../asset/detailcapture.webm";
 
 interface AngleGifTutorialProps {
   angle: (typeof angleOrder)[number];
@@ -44,7 +45,7 @@ const angleData = {
   detail: {
     title: "Detail Capture",
     subtitle: "Close-up Details",
-    video: middleVideo, // Placeholder - reusing middle video
+    video: detailcapture, // Placeholder - reusing middle video
     speak: "This is the detail capture. Get close to the object and slowly pan across interesting features and textures.",
     lines: ["Get close to object", "Focus on textures & details", "Move slowly across surface"],
   },
