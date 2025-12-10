@@ -39,8 +39,8 @@ const OrientationLock = ({ children }: OrientationLockProps) => {
     return (
       <div className="absolute inset-0 bg-background/90 backdrop-blur-md z-50 flex flex-col items-center justify-center text-foreground p-6 text-center">
         <RotateCcw className="w-12 h-12 mb-4 animate-pulse text-primary" />
-        <h2 className="text-xl font-bold mb-2">Rotate Device</h2>
-        <p className="text-muted-foreground">Please use landscape mode.</p>
+        <h2 className="text-xl font-bold mb-2">Rotate to start the 3D scanning</h2>
+        <p className="text-muted-foreground">Ensure auto-rotate is enabled.</p>
       </div>
     );
   }

@@ -11,8 +11,8 @@ const TOTAL_DURATION = ANGLE_DURATION * 4;
 
 const PHASES = [
   { id: 1, label: "Middle", instruction: "Hold phone at chest height. Walk around object." },
-  { id: 2, label: "Top", instruction: "Raise the phone and Tilt it downwards 45°" },
-  { id: 3, label: "Bottom", instruction: "Lower phone and Tilt it upwards 45°." },
+  { id: 2, label: "Top", instruction: "Raise the phone and Tilt it downwards 45°" },
+  { id: 3, label: "Bottom", instruction: "Lower phone and Tilt it upwards 45°." },
   { id: 4, label: "Detail", instruction: "Get close. Pan slowly across textures." },
 ];
 
@@ -58,31 +58,59 @@ export const CameraRecorder = ({ onRecordingComplete }: CameraRecorderProps) => 
     window.speechSynthesis.speak(msg);
   }, []);
 
-  // --- 1. Init Camera ---
+  // --- 1. Init Camera (UPDATED FOR STABILITY & SHARPNESS) ---
   useEffect(() => {
     const initCamera = async () => {
       try {
+        // OPTIMIZED CONSTRAINTS
         const constraints: MediaStreamConstraints = {
           video: { 
             facingMode: "environment", 
-            width: { ideal: 3840 }, 
-            height: { ideal: 2160 }, 
-            frameRate: { ideal: 30 } 
+            // 1080p is preferred for hardware stabilization support on mobile web
+            width: { ideal: 1920 }, 
+            height: { ideal: 1080 }, 
+            frameRate: { ideal: 30, max: 60 },
+            // @ts-ignore - Advanced constraints to fix focus and stabilization
+            advanced: [
+              { focusMode: "continuous" } as any,      // Fixes texture sharpness
+              { exposureMode: "continuous" } as any,   // Fixes lighting changes
+              { whiteBalanceMode: "continuous" } as any,
+              { imageStabilization: true }      // Fixes the "ziggle"
+            ] as any
           },
           audio: false, 
         };
 
         const stream = await navigator.mediaDevices.getUserMedia(constraints);
+        
+        // FORCE APPLY CONSTRAINTS TO TRACK
+        // This ensures settings stick even if browser ignores initial constraints
+        const track = stream.getVideoTracks()[0];
+        const capabilities = track.getCapabilities() as any;
+        const settings = track.getSettings();
+        const advancedConstraints: any = {};
+
+        if (capabilities.focusMode && capabilities.focusMode.includes('continuous')) {
+          advancedConstraints.focusMode = 'continuous';
+        }
+        if (capabilities.imageStabilization) {
+          advancedConstraints.imageStabilization = true;
+        }
+        
+        try {
+          if (Object.keys(advancedConstraints).length > 0) {
+            await track.applyConstraints({ advanced: [advancedConstraints] });
+          }
+        } catch (e) {
+          console.warn("Could not apply advanced camera constraints", e);
+        }
+
         streamRef.current = stream;
         if (videoRef.current) videoRef.current.srcObject = stream;
 
         // --- Zoom Initialization ---
-        const tracks = stream.getVideoTracks();
-        if (tracks.length > 0) {
-          const track = tracks[0];
+        if (track) {
           // @ts-ignore
-          const capabilities = track.getCapabilities ? track.getCapabilities() : {} as Record<string, unknown>;
-
           if ('zoom' in capabilities) {
             setHasZoom(true);
             const zoomCaps = capabilities.zoom as { min: number; max: number };
@@ -113,16 +141,20 @@ export const CameraRecorder = ({ onRecordingComplete }: CameraRecorderProps) => 
     };
   }, []);
 
-  // --- Controls ---
+  // --- Controls (UPDATED BITRATE) ---
   const startRecording = () => {
     if (!streamRef.current) return;
     chunksRef.current = [];
     
-    const mimeType = MediaRecorder.isTypeSupported("video/mp4;codecs=avc1") ? "video/mp4;codecs=avc1" : "video/webm";
+    // Prefer H.264 for better compatibility
+    const mimeType = MediaRecorder.isTypeSupported("video/mp4;codecs=avc1") 
+      ? "video/mp4;codecs=avc1" 
+      : "video/webm";
     
+    // Lowered to 15Mbps to prevent stuttering while maintaining high texture quality
     const recorder = new MediaRecorder(streamRef.current, { 
       mimeType, 
-      videoBitsPerSecond: 50000000 
+      videoBitsPerSecond: 15000000 
     });
 
     recorder.ondataavailable = (e) => { 
@@ -243,7 +275,7 @@ export const CameraRecorder = ({ onRecordingComplete }: CameraRecorderProps) => 
       {!isLandscape && (
         <div className="absolute inset-0 bg-black/90 z-[60] flex flex-col items-center justify-center text-white gap-4">
           <RotateCw className="w-12 h-12 animate-spin" />
-          <p className="text-sm uppercase tracking-wider">Rotate to Landscape</p>
+          <p className="text-sm uppercase tracking-wider">Rotate to start the 3D scanning. Ensure auto-rotate is enabled</p>
         </div>
       )}
 
@@ -277,11 +309,10 @@ export const CameraRecorder = ({ onRecordingComplete }: CameraRecorderProps) => 
             </div>
           </div>
 
-          {/* --- RIGHT SIDE: CONTROLS STACK (MOVED OUT OF BOTTOM BAR) --- */}
-          {/* Fixed positioning guarantees it stays on the right side middle, independent of bottom bar */}
+          {/* --- RIGHT SIDE: CONTROLS STACK --- */}
           <div className="fixed right-8 top-1/2 -translate-y-1/2 z-50 flex flex-col items-center gap-6">
             
-            {/* ZOOM BUTTON (Top) */}
+            {/* ZOOM BUTTON */}
             {hasZoom && (
               <button
                 onClick={toggleZoom}
@@ -291,7 +322,7 @@ export const CameraRecorder = ({ onRecordingComplete }: CameraRecorderProps) => 
               </button>
             )}
 
-            {/* PLAY/PAUSE BUTTON (Bottom) */}
+            {/* PLAY/PAUSE BUTTON */}
             <button
               onClick={togglePause}
               className={cn(
@@ -335,7 +366,7 @@ export const CameraRecorder = ({ onRecordingComplete }: CameraRecorderProps) => 
                   />
                 </div>
 
-                {/* Angle Indicators (Centered below Timer) */}
+                {/* Angle Indicators */}
                 <div className="flex items-center gap-6 mt-1">
                   {PHASES.map((phase, index) => {
                     const isActive = index === currentPhaseIdx;

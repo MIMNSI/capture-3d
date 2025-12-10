@@ -30,16 +30,16 @@ export const concatVideos = async (blobs: Blob[]): Promise<Blob> => {
     i++;
   }
 
-  // Convert and merge to high-quality MP4
+  // Convert and merge to high-quality MP4 using 'ultrafast' to prevent crashes
   await ffmpeg.exec([
     "-i",
     `concat:${inputPaths.join("|")}`,
     "-c:v",
     "libx264",
     "-preset",
-    "slow",
+    "ultrafast", // CHANGED: 'slow' crashes browser memory. 'ultrafast' is safer.
     "-crf",
-    "15",
+    "18",        // CHANGED: 18 is visually lossless (sharp textures)
     "-pix_fmt",
     "yuv420p",
     "output.mp4",
