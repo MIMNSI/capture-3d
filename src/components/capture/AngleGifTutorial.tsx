@@ -1,9 +1,11 @@
 import React, { FC, useEffect, useState, useCallback, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Volume2,
   VolumeX,
   ChevronRight,
   ChevronLeft,
+  ArrowLeft,
 } from "lucide-react";
 
 // Video Imports
@@ -47,11 +49,12 @@ const angleData = {
     subtitle: "Close-up Details",
     video: detailcapture, // Placeholder - reusing middle video
     speak: "This is the detail capture. Get close to the object and slowly pan across interesting features and textures.",
-    lines: ["Get close to object", "Focus on textures & details", "Move slowly across surface"],
+    lines: ["Capture the instrument cluster and the entire seat.", "Focus on textures & details", "Move slowly across surface"],
   },
 };
 
 const AngleGifTutorial: FC<AngleGifTutorialProps> = ({ angle, onNext, onPrev }) => {
+  const navigate = useNavigate();
   const step = angleOrder.indexOf(angle);
   const data = angleData[angle];
 
@@ -215,8 +218,23 @@ const AngleGifTutorial: FC<AngleGifTutorialProps> = ({ angle, onNext, onPrev }) 
 
         {/* HEADER */}
         <div className="flex justify-between items-start mb-4">
-          <div className="inline-flex items-center gap-2 px-2 py-0.5 rounded-md bg-[#2DFFA7]/10 border border-[#2DFFA7]/20 text-[#2DFFA7] text-[10px] font-bold tracking-wide uppercase">
-            Step {step + 1} of 4
+          <div className="flex items-center gap-3">
+            <button 
+              onClick={() => {
+                if (step > 0) {
+                  onPrev();
+                } else {
+                  navigate(-1);
+                }
+              }} 
+              className="text-[#777] hover:text-white transition-colors"
+              aria-label="Back"
+            >
+              <ArrowLeft size={20} />
+            </button>
+            <div className="inline-flex items-center gap-2 px-2 py-0.5 rounded-md bg-[#2DFFA7]/10 border border-[#2DFFA7]/20 text-[#2DFFA7] text-[10px] font-bold tracking-wide uppercase">
+              Step {step + 1} of 4
+            </div>
           </div>
 
           <button 
@@ -266,18 +284,6 @@ const AngleGifTutorial: FC<AngleGifTutorialProps> = ({ angle, onNext, onPrev }) 
                     <ChevronRight className="w-4 h-4" />
                 </button>
             )}
-
-            <div className="flex justify-center h-4">
-                <button 
-                    onClick={onPrev}
-                    disabled={step === 0}
-                    className={`text-[10px] font-medium flex items-center gap-1 transition-colors ${
-                        step === 0 ? 'opacity-0 cursor-default' : 'text-[#555] hover:text-[#888]'
-                    }`}
-                >
-                    <ChevronLeft size={10} /> Previous
-                </button>
-            </div>
         </div>
 
       </div>

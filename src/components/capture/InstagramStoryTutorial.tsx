@@ -31,8 +31,8 @@ const topics: Topic[] = [
   },
   {
     id: 2,
-    instruction: "Frame the Object",
-    subtext: "Keep the whole object visible",
+    instruction: "Keep the object in frame",
+    subtext: "Fit the entire object on screen.",
     goodImg: frameObjectGood,
     badImg: frameObjectBad,
   },

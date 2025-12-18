@@ -41,6 +41,7 @@ export const CameraRecorder = ({ onRecordingComplete }: CameraRecorderProps) => 
   const [elapsed, setElapsed] = useState(0);
   const [currentPhaseIdx, setCurrentPhaseIdx] = useState(0);
   const [flash, setFlash] = useState(false);
+  const [phaseHighlight, setPhaseHighlight] = useState(false); // NEW: Controls the blink effect
   
   // Zoom State
   const [zoomLevel, setZoomLevel] = useState(1);
@@ -58,24 +59,22 @@ export const CameraRecorder = ({ onRecordingComplete }: CameraRecorderProps) => 
     window.speechSynthesis.speak(msg);
   }, []);
 
-  // --- 1. Init Camera (UPDATED FOR STABILITY & SHARPNESS) ---
+  // --- 1. Init Camera ---
   useEffect(() => {
     const initCamera = async () => {
       try {
-        // OPTIMIZED CONSTRAINTS
         const constraints: MediaStreamConstraints = {
           video: { 
             facingMode: "environment", 
-            // 1080p is preferred for hardware stabilization support on mobile web
             width: { ideal: 1920 }, 
             height: { ideal: 1080 }, 
             frameRate: { ideal: 30, max: 60 },
-            // @ts-ignore - Advanced constraints to fix focus and stabilization
+            // @ts-ignore
             advanced: [
-              { focusMode: "continuous" } as any,      // Fixes texture sharpness
-              { exposureMode: "continuous" } as any,   // Fixes lighting changes
+              { focusMode: "continuous" } as any,
+              { exposureMode: "continuous" } as any,
               { whiteBalanceMode: "continuous" } as any,
-              { imageStabilization: true }      // Fixes the "ziggle"
+              { imageStabilization: true }
             ] as any
           },
           audio: false, 
@@ -83,11 +82,9 @@ export const CameraRecorder = ({ onRecordingComplete }: CameraRecorderProps) => 
 
         const stream = await navigator.mediaDevices.getUserMedia(constraints);
         
-        // FORCE APPLY CONSTRAINTS TO TRACK
-        // This ensures settings stick even if browser ignores initial constraints
+        // Apply constraints logic (Zoom, Focus, etc.)
         const track = stream.getVideoTracks()[0];
         const capabilities = track.getCapabilities() as any;
-        const settings = track.getSettings();
         const advancedConstraints: any = {};
 
         if (capabilities.focusMode && capabilities.focusMode.includes('continuous')) {
@@ -108,25 +105,18 @@ export const CameraRecorder = ({ onRecordingComplete }: CameraRecorderProps) => 
         streamRef.current = stream;
         if (videoRef.current) videoRef.current.srcObject = stream;
 
-        // --- Zoom Initialization ---
-        if (track) {
-          // @ts-ignore
-          if ('zoom' in capabilities) {
-            setHasZoom(true);
-            const zoomCaps = capabilities.zoom as { min: number; max: number };
-            const min = zoomCaps.min;
-            setMinZoom(min);
-
-            const initialZoom = min < 1 ? min : 1;
-            setZoomLevel(initialZoom);
-            
-            try {
-              // @ts-ignore
-              await track.applyConstraints({ advanced: [{ zoom: initialZoom }] });
-            } catch (e) {
-              console.warn("Zoom constraint failed", e);
-            }
-          }
+        // Zoom Logic
+        if (track && 'zoom' in capabilities) {
+          setHasZoom(true);
+          const zoomCaps = capabilities.zoom as { min: number; max: number };
+          const min = zoomCaps.min;
+          setMinZoom(min);
+          const initialZoom = min < 1 ? min : 1;
+          setZoomLevel(initialZoom);
+          try {
+            // @ts-ignore
+            await track.applyConstraints({ advanced: [{ zoom: initialZoom }] });
+          } catch (e) { console.warn("Zoom constraint failed", e); }
         }
       } catch (err) {
         console.error(err);
@@ -141,17 +131,15 @@ export const CameraRecorder = ({ onRecordingComplete }: CameraRecorderProps) => 
     };
   }, []);
 
-  // --- Controls (UPDATED BITRATE) ---
+  // --- Controls ---
   const startRecording = () => {
     if (!streamRef.current) return;
     chunksRef.current = [];
     
-    // Prefer H.264 for better compatibility
     const mimeType = MediaRecorder.isTypeSupported("video/mp4;codecs=avc1") 
       ? "video/mp4;codecs=avc1" 
       : "video/webm";
     
-    // Lowered to 15Mbps to prevent stuttering while maintaining high texture quality
     const recorder = new MediaRecorder(streamRef.current, { 
       mimeType, 
       videoBitsPerSecond: 15000000 
@@ -200,9 +188,7 @@ export const CameraRecorder = ({ onRecordingComplete }: CameraRecorderProps) => 
       // @ts-ignore
       await track.applyConstraints({ advanced: [{ zoom: targetZoom }] });
       setZoomLevel(targetZoom);
-    } catch (e) {
-      console.error("Zoom failed", e);
-    }
+    } catch (e) { console.error("Zoom failed", e); }
   };
 
   const triggerFlash = () => {
@@ -219,7 +205,7 @@ export const CameraRecorder = ({ onRecordingComplete }: CameraRecorderProps) => 
     speak("Recording complete.");
   }, [speak]);
 
-  // --- Timer Loop ---
+  // --- Timer Loop (UPDATED) ---
   useEffect(() => {
     if (status !== "recording") return;
 
@@ -227,23 +213,29 @@ export const CameraRecorder = ({ onRecordingComplete }: CameraRecorderProps) => 
       setElapsed((prev) => {
         const nextTime = prev + 1;
 
-        if (nextTime === ANGLE_DURATION) {
-          setCurrentPhaseIdx(1); 
+        // HELPER: Change phase and trigger blink/voice
+        const changePhase = (idx: number, message: string) => {
+          setCurrentPhaseIdx(idx); 
+          
+          // Trigger Flash (screen)
           triggerFlash();
+          
+          // Trigger Title Blink (2 seconds)
+          setPhaseHighlight(true);
+          setTimeout(() => setPhaseHighlight(false), 2000);
+
           if (navigator.vibrate) navigator.vibrate(200);
-          speak("Switch to Top Angle. Raise phone high and tilt down.");
+          speak(message);
+        };
+
+        if (nextTime === ANGLE_DURATION) {
+          changePhase(1, "Switch to Top Angle. Raise phone high and tilt down.");
         } 
         else if (nextTime === ANGLE_DURATION * 2) {
-          setCurrentPhaseIdx(2);
-          triggerFlash();
-          if (navigator.vibrate) navigator.vibrate(200);
-          speak("Switch to Bottom Angle. Lower phone and tilt up.");
+          changePhase(2, "Switch to Bottom Angle. Lower phone and tilt up.");
         }
         else if (nextTime === ANGLE_DURATION * 3) {
-          setCurrentPhaseIdx(3);
-          triggerFlash();
-          if (navigator.vibrate) navigator.vibrate(200);
-          speak("Switch to Detail Capture. Get close and pan across textures.");
+          changePhase(3, "Switch to Detail Capture. Get close and pan across textures.");
         }
         else if (nextTime >= TOTAL_DURATION) {
           clearInterval(interval);
@@ -275,7 +267,7 @@ export const CameraRecorder = ({ onRecordingComplete }: CameraRecorderProps) => 
       {!isLandscape && (
         <div className="absolute inset-0 bg-black/90 z-[60] flex flex-col items-center justify-center text-white gap-4">
           <RotateCw className="w-12 h-12 animate-spin" />
-          <p className="text-sm uppercase tracking-wider">Rotate to start the 3D scanning. Ensure auto-rotate is enabled</p>
+          <p className="text-sm uppercase tracking-wider">Rotate to start the 3D scanning.</p>
         </div>
       )}
 
@@ -297,10 +289,20 @@ export const CameraRecorder = ({ onRecordingComplete }: CameraRecorderProps) => 
             <span className="text-white text-xs font-mono font-medium">REC</span>
           </div>
 
-          {/* --- TOP CENTER: INSTRUCTIONS --- */}
+          {/* --- TOP CENTER: INSTRUCTIONS (UPDATED WITH BLINK) --- */}
           <div className="absolute top-6 left-1/2 -translate-x-1/2 z-20 w-[80%] max-w-md pointer-events-none">
-            <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-3 text-center shadow-lg transition-all duration-300">
-              <h2 className="text-lg font-bold text-primary mb-0.5 uppercase tracking-wider">
+            <div className={cn(
+              "backdrop-blur-md border rounded-xl p-3 text-center shadow-lg transition-all duration-300",
+              // BLINK LOGIC: Changes background, border, and adds pulsing animation
+              phaseHighlight 
+                ? "bg-yellow-500/40 border-yellow-400 scale-105 animate-pulse" 
+                : "bg-black/40 border-white/10"
+            )}>
+              <h2 className={cn(
+                "text-lg font-bold mb-0.5 uppercase tracking-wider transition-colors",
+                // Text Color change on highlight
+                phaseHighlight ? "text-yellow-300" : "text-primary"
+              )}>
                 {currentPhase.label}
               </h2>
               <p className="text-white/90 text-sm font-medium leading-tight">
