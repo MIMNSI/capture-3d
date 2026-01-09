@@ -18,7 +18,12 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <Routes>
-          <Route path="/" element={<Home />} />
+          {/* CHANGED: Root path now renders ObjectIntro directly, skipping the Home/Landing page */}
+          <Route path="/" element={<ObjectIntro />} />
+          
+          {/* Optional: Keep Home accessible via specific route if needed later */}
+          <Route path="/home" element={<Home />} />
+          
           <Route path="/object-intro" element={<ObjectIntro />} />
           <Route path="/record" element={<OrientationLock><RecordFlow /></OrientationLock>} />
           
